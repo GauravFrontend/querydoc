@@ -26,6 +26,25 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
         selectedModel.includes('gemma2-9b')
     );
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
+
+    // Auto-focus input when loading finishes
+    useEffect(() => {
+        if (!isLoading) {
+            // Small timeout to ensure DOM is ready and accessible
+            setTimeout(() => {
+                inputRef.current?.focus();
+            }, 10);
+        }
+    }, [isLoading]);
+
+    // Auto-resize input
+    useEffect(() => {
+        if (inputRef.current) {
+            inputRef.current.style.height = 'auto'; // Reset to calculate new scrollHeight
+            inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 340)}px`;
+        }
+    }, [input]);
 
     useEffect(() => {
         setIsCloudMode(
@@ -373,12 +392,7 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                             min-h-[50px] overflow-y-auto custom-scrollbar
                             text-sm
                         "
-                        ref={(el) => {
-                            if (el) {
-                                el.style.height = 'auto';
-                                el.style.height = `${Math.min(el.scrollHeight, 340)}px`;
-                            }
-                        }}
+                        ref={inputRef}
                     />
 
                     {/* Toolbar */}
