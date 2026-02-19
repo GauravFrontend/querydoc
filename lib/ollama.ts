@@ -74,9 +74,10 @@ export const getBaseUrl = () => {
         const stored = localStorage.getItem('ollama_url');
         if (stored) return stored;
     }
-    return process.env.NEXT_PUBLIC_OLLAMA_URL || 'http://localhost:11434';
+    return process.env.NEXT_PUBLIC_OLLAMA_URL || 'https://unsymptomatical-nonperverted-jacinta.ngrok-free.dev';
 };
 
+console.log("http://localhost:11434")
 /**
  * Check if Ollama is running
  */
