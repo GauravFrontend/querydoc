@@ -56,6 +56,12 @@ export default function ChatInterface({ chunks, selectedModel }: ChatInterfacePr
         setIsLoading(true);
         setStreamingContent('');
 
+        // Dynamic import for toast
+        const { toast } = await import('react-hot-toast');
+        const loadingToast = toast.loading(`Waking up ${selectedModel}...`, {
+            icon: '🧠',
+        });
+
         try {
             // Find relevant chunks
             const relevantChunks = findRelevantChunks(question, chunks, 3);
@@ -69,7 +75,15 @@ export default function ChatInterface({ chunks, selectedModel }: ChatInterfacePr
 
             // Query Ollama with streaming
             let fullResponse = '';
+            let hasReceivedFirstToken = false;
+
             await queryOllama(prompt, selectedModel, (chunk) => {
+                if (!hasReceivedFirstToken) {
+                    hasReceivedFirstToken = true;
+                    toast.success(`${selectedModel} loaded!`, {
+                        id: loadingToast,
+                    });
+                }
                 fullResponse += chunk;
                 setStreamingContent(fullResponse);
             });
@@ -86,6 +100,7 @@ export default function ChatInterface({ chunks, selectedModel }: ChatInterfacePr
             setMessages(prev => [...prev, assistantMessage]);
             setStreamingContent('');
         } catch (error) {
+            toast.error('Failed to get answer', { id: loadingToast });
             const errorMessage: MessageType = {
                 id: (Date.now() + 3).toString(),
                 role: 'assistant',

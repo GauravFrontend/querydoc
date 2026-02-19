@@ -10,12 +10,13 @@ if (typeof window !== 'undefined') {
 /**
  * Extract text from a PDF file
  */
-export async function extractTextFromPDF(file: File): Promise<PageText[]> {
+export async function extractTextFromPDF(file: File): Promise<{ pages: PageText[], totalPages: number }> {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const pages: PageText[] = [];
+    const totalPages = pdf.numPages;
 
-    const pagesToProcess = Math.min(pdf.numPages, 5);
+    const pagesToProcess = Math.min(totalPages, 5);
     for (let i = 1; i <= pagesToProcess; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
@@ -29,7 +30,7 @@ export async function extractTextFromPDF(file: File): Promise<PageText[]> {
         });
     }
 
-    return pages;
+    return { pages, totalPages };
 }
 
 /**

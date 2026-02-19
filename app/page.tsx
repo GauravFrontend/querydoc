@@ -22,11 +22,32 @@ export default function Home() {
     setIsProcessing(true);
 
     try {
-      // Dynamically import PDF processor to avoid SSR issues
+      // Dynamically import PDF processor and toast
       const { extractTextFromPDF, detectScannedPDF, chunkText } = await import('@/lib/pdfProcessor');
+      const { toast } = await import('react-hot-toast');
 
       // Extract text from PDF
-      const pages = await extractTextFromPDF(file);
+      const { pages, totalPages } = await extractTextFromPDF(file);
+
+      // Show toast if PDF is larger than 5 pages
+      if (totalPages > 5) {
+        toast.error(
+          `Demo Limit: This PDF has ${totalPages} pages. Only the first 5 pages will be processed to maintain speed.`,
+          {
+            duration: 8000,
+            icon: '⚠️',
+            style: {
+              borderRadius: '12px',
+              background: '#fff7ed', // amber-50
+              color: '#9a3412', // amber-800
+              border: '2px solid #fbbf24', // amber-400
+              fontWeight: 'bold',
+              fontSize: '14px',
+              padding: '16px',
+            },
+          }
+        );
+      }
 
       // Check if PDF is scanned
       if (detectScannedPDF(pages)) {
