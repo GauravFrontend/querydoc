@@ -5,7 +5,7 @@ export async function queryOllama(
     prompt: string,
     model: string,
     onStream: (text: string) => void
-): Promise<string> {
+): Promise<{ response: string; stats?: any }> {
     try {
         const baseUrl = getBaseUrl();
         const response = await fetch(`${baseUrl}/api/generate`, {
@@ -59,7 +59,15 @@ export async function queryOllama(
                     }
 
                     if (json.done) {
-                        return fullResponse;
+                        return {
+                            response: fullResponse,
+                            stats: {
+                                eval_count: json.eval_count,
+                                prompt_eval_count: json.prompt_eval_count,
+                                total_duration: json.total_duration,
+                                load_duration: json.load_duration
+                            }
+                        };
                     }
                 } catch (e) {
                     console.error('Error parsing JSON:', e);
@@ -67,7 +75,7 @@ export async function queryOllama(
             }
         }
 
-        return fullResponse;
+        return { response: fullResponse };
     } catch (error) {
         if (error instanceof TypeError && error.message.includes('fetch')) {
             throw new Error(

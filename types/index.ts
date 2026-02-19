@@ -15,6 +15,12 @@ export interface Message {
     content: string;
     pageNumber?: number;
     timestamp: Date;
+    stats?: {
+        eval_count: number;
+        prompt_eval_count: number;
+        total_duration: number;
+        load_duration?: number;
+    };
 }
 
 export interface HighlightArea {

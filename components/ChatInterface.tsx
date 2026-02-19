@@ -174,6 +174,7 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
 
             // Query logic
             let fullResponse = '';
+            let responseStats = undefined;
             let hasReceivedFirstToken = false;
 
             if (effectiveIsCloud) {
@@ -187,14 +188,16 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                 });
                 incrementGroqUsage();
             } else {
-                await queryOllama(prompt, effectiveModel, (chunk: string) => {
+                const result = await queryOllama(prompt, effectiveModel, (chunk: string) => {
                     if (!hasReceivedFirstToken) {
                         hasReceivedFirstToken = true;
                         toast.success(`${effectiveModel} loaded!`, { id: loadingToast });
                     }
-                    fullResponse += chunk;
-                    setStreamingContent(fullResponse);
+                    // We rely on the final result for the full response to avoid duplication issues
+                    setStreamingContent(prev => prev + chunk);
                 });
+                fullResponse = result.response;
+                responseStats = result.stats;
             }
 
             // Add assistant message
@@ -204,6 +207,7 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                 content: fullResponse,
                 pageNumber: relevantChunks[0].pageNumber,
                 timestamp: new Date(),
+                stats: responseStats
             };
 
             setMessages(prev => [...prev, assistantMessage]);
