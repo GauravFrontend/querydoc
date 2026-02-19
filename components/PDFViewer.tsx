@@ -12,11 +12,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLi
 
 interface PDFViewerProps {
     file: File;
+    initialPage?: number;
+    onPageChange?: (page: number) => void;
 }
 
-export default function PDFViewer({ file }: PDFViewerProps) {
+export default function PDFViewer({ file, initialPage = 1, onPageChange }: PDFViewerProps) {
     const [numPages, setNumPages] = useState(0);
-    const [currentPage, setCurrentPage] = useState(1);
+    const [currentPage, setCurrentPage] = useState(initialPage);
     const [scale, setScale] = useState(1.0);
     const [pdfDoc, setPdfDoc] = useState<any>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -27,6 +29,13 @@ export default function PDFViewer({ file }: PDFViewerProps) {
     const [viewport, setViewport] = useState<any>(null);
     const [selection, setSelection] = useState<SelectionData | null>(null);
     const [savedHighlights, setSavedHighlights] = useState<HighlightArea[]>([]);
+
+    // Sync currentPage if initialPage changes (e.g., after restoration)
+    useEffect(() => {
+        if (initialPage !== currentPage) {
+            setCurrentPage(initialPage);
+        }
+    }, [initialPage]);
 
     // Load PDF
     useEffect(() => {
@@ -101,11 +110,15 @@ export default function PDFViewer({ file }: PDFViewerProps) {
     }, [pdfDoc, currentPage, scale]);
 
     const handlePrevPage = () => {
-        setCurrentPage(prev => Math.max(1, prev - 1));
+        const next = Math.max(1, currentPage - 1);
+        setCurrentPage(next);
+        if (onPageChange) onPageChange(next);
     };
 
     const handleNextPage = () => {
-        setCurrentPage(prev => Math.min(numPages, prev + 1));
+        const next = Math.min(numPages, currentPage + 1);
+        setCurrentPage(next);
+        if (onPageChange) onPageChange(next);
     };
 
     const handleZoomIn = () => {

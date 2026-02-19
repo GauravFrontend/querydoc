@@ -44,6 +44,7 @@ interface AppState {
     chunks: Chunk[];
     extractedPages: PageText[];
     selectedModel: string;
+    currentPage: number;
 }
 
 export function saveState(state: AppState) {

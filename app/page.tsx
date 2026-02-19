@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import UploadZone from '@/components/UploadZone';
 // Dynamically import PDFViewer to avoid SSR issues with canvas/pdfjs
-const PDFViewer = dynamic(() => import('@/components/PDFViewer'), { ssr: false });
+const PDFViewer = dynamic<any>(() => import('@/components/PDFViewer'), { ssr: false });
 import ChatInterface from '@/components/ChatInterface';
 import ModelSelector from '@/components/ModelSelector';
 import { Chunk, PageText } from '@/types';
@@ -21,6 +21,7 @@ export default function Home() {
   const [showDebug, setShowDebug] = useState(false);
   const [ocrPendingFile, setOcrPendingFile] = useState<File | null>(null);
   const [ocrStatus, setOcrStatus] = useState<{ page: number, total: number, status: string } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [isRestoring, setIsRestoring] = useState(true);
 
   // Restore state on mount
@@ -34,6 +35,7 @@ export default function Home() {
           setChunks(savedState.chunks);
           setExtractedPages(savedState.extractedPages);
           setSelectedModel(savedState.selectedModel);
+          setCurrentPage(savedState.currentPage || 1);
         }
       } catch (e) {
         console.error('Failed to restore state:', e);
@@ -50,11 +52,12 @@ export default function Home() {
       saveState({
         chunks,
         extractedPages,
-        selectedModel
+        selectedModel,
+        currentPage
       });
       savePDF(pdfFile);
     }
-  }, [pdfFile, chunks, extractedPages, selectedModel, isRestoring]);
+  }, [pdfFile, chunks, extractedPages, selectedModel, isRestoring, currentPage]);
 
   const handleFileSelect = async (file: File) => {
     setError(null);
@@ -102,6 +105,7 @@ export default function Home() {
 
       setPdfFile(file);
       setChunks(textChunks);
+      setCurrentPage(1);
     } catch (err) {
       setError(
         `Error processing PDF: ${err instanceof Error ? err.message : 'Unknown error'}`
@@ -140,6 +144,7 @@ export default function Home() {
 
       setPdfFile(fileToProcess);
       setChunks(textChunks);
+      setCurrentPage(1);
       setOcrPendingFile(null);
     } catch (err) {
       console.error('OCR Error detail:', err);
@@ -161,6 +166,7 @@ export default function Home() {
     setShowDebug(false);
     setOcrPendingFile(null);
     setOcrStatus(null);
+    setCurrentPage(1);
   };
 
   // No PDF layout
@@ -325,7 +331,7 @@ export default function Home() {
         <div className="hidden md:flex w-full h-full">
           {/* PDF viewer - 60% standard, 35% debug mode */}
           <div className={`${showDebug ? 'w-[35%]' : 'w-3/5'} border-r border-gray-200 h-full transition-all duration-300`}>
-            {pdfFile && <PDFViewer file={pdfFile} />}
+            {pdfFile && <PDFViewer file={pdfFile} initialPage={currentPage} onPageChange={setCurrentPage} />}
           </div>
 
           {/* Debug middle column - only on desktop when debug is enabled */}
@@ -374,7 +380,7 @@ export default function Home() {
         <div className="md:hidden w-full h-full">
           {showMobileView === 'pdf' && pdfFile && (
             <div className="relative w-full h-full">
-              <PDFViewer file={pdfFile} />
+              <PDFViewer file={pdfFile} initialPage={currentPage} onPageChange={setCurrentPage} />
 
               {/* Floating action button to see text on mobile */}
               <button
