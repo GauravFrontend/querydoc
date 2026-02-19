@@ -22,6 +22,30 @@ const MODELS = [
         id: 'qwen2.5:7b-instruct-q4_0',
         name: 'Qwen 2.5 7B',
         info: '🕒 Steady • Highest Accuracy',
+    },
+    {
+        id: 'llama-3.1-70b-versatile',
+        name: 'G Cloud: Llama 70B',
+        info: '☁️ Best Quality • For complex questions',
+        isCloud: true,
+    },
+    {
+        id: 'llama-3.1-8b-instant',
+        name: 'G Cloud: Llama 8B',
+        info: '☁️ Quick Answers • Ultra-fast',
+        isCloud: true,
+    },
+    {
+        id: 'mixtral-8x7b-32768',
+        name: 'G Cloud: Mixtral 8x7B',
+        info: '☁️ Balanced • Great for long context',
+        isCloud: true,
+    },
+    {
+        id: 'gemma2-9b-it',
+        name: 'G Cloud: Gemma 9B',
+        info: '☁️ Fast • Solid logic',
+        isCloud: true,
     }
 ];
 

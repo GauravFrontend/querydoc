@@ -323,7 +323,7 @@ export default function Home() {
 
           {/* Chat - 40% standard, 35% debug mode */}
           <div className={`${showDebug ? 'w-[35%]' : 'w-2/5'} h-full transition-all duration-300`}>
-            <ChatInterface chunks={chunks} selectedModel={selectedModel} />
+            <ChatInterface chunks={chunks} selectedModel={selectedModel} onModelChange={setSelectedModel} />
           </div>
         </div>
 
@@ -390,7 +390,7 @@ export default function Home() {
             </div>
           </div>
 
-          {showMobileView === 'chat' && <ChatInterface chunks={chunks} selectedModel={selectedModel} />}
+          {showMobileView === 'chat' && <ChatInterface chunks={chunks} selectedModel={selectedModel} onModelChange={setSelectedModel} />}
         </div>
       </div>
 

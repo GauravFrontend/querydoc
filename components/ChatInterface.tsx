@@ -4,19 +4,34 @@ import { useState, useRef, useEffect } from 'react';
 import { Message as MessageType, Chunk } from '@/types';
 import Message from './Message';
 import { queryOllama, checkOllamaStatus, getBaseUrl } from '@/lib/ollama';
+import { queryGroq, getGroqUsage, incrementGroqUsage, GROQ_LIMIT } from '@/lib/groq';
 import { findRelevantChunks, buildPrompt } from '@/lib/ragUtils';
 
 interface ChatInterfaceProps {
     chunks: Chunk[];
     selectedModel: string;
+    onModelChange?: (model: string) => void;
 }
 
-export default function ChatInterface({ chunks, selectedModel }: ChatInterfaceProps) {
+export default function ChatInterface({ chunks, selectedModel, onModelChange }: ChatInterfaceProps) {
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [streamingContent, setStreamingContent] = useState('');
+    const [isCloudMode, setIsCloudMode] = useState(
+        selectedModel.includes('llama') ||
+        selectedModel.includes('mixtral') ||
+        selectedModel.includes('gemma2-9b')
+    );
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        setIsCloudMode(
+            selectedModel.includes('llama') ||
+            selectedModel.includes('mixtral') ||
+            selectedModel.includes('gemma2-9b')
+        );
+    }, [selectedModel]);
 
     // Auto-scroll to bottom
     useEffect(() => {
@@ -40,17 +55,54 @@ export default function ChatInterface({ chunks, selectedModel }: ChatInterfacePr
         };
         setMessages(prev => [...prev, userMessage]);
 
-        // Check if Ollama is running
-        const isOllamaRunning = await checkOllamaStatus();
-        if (!isOllamaRunning) {
-            const errorMessage: MessageType = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: `❌ Cannot connect to Ollama. Please ensure Ollama is running at ${getBaseUrl()}`,
-                timestamp: new Date(),
-            };
-            setMessages(prev => [...prev, errorMessage]);
-            return;
+        let effectiveModel = selectedModel;
+        let effectiveIsCloud = isCloudMode;
+
+        // Check if Ollama is running if we are NOT in cloud mode
+        if (!effectiveIsCloud) {
+            const isOllamaRunning = await checkOllamaStatus();
+            if (!isOllamaRunning) {
+                // Fallback to Groq if local is down
+                const usage = getGroqUsage();
+                if (usage >= GROQ_LIMIT) {
+                    const errorMessage: MessageType = {
+                        id: (Date.now() + 1).toString(),
+                        role: 'assistant',
+                        content: `❌ Local model is offline and Cloud Backup limit (5/5) has been reached. Please check your Ollama connection at ${getBaseUrl()}`,
+                        timestamp: new Date(),
+                    };
+                    setMessages(prev => [...prev, errorMessage]);
+                    return;
+                }
+
+                // Switch to cloud mode automatically - use the fastest Llama model for fallback
+                effectiveModel = 'llama-3.1-8b-instant';
+                effectiveIsCloud = true;
+                if (onModelChange) onModelChange('llama-3.1-8b-instant');
+
+                const fallbackMessage: MessageType = {
+                    id: (Date.now() + 1.1).toString(),
+                    role: 'assistant',
+                    content: `⚠️ Note: Local Ollama is offline. Automatically switched to Cloud Backup (Llama 8B). (Requests left: ${GROQ_LIMIT - usage})`,
+                    timestamp: new Date(),
+                };
+                setMessages(prev => [...prev, fallbackMessage]);
+            }
+        }
+
+        // If in cloud mode, check usage limit
+        if (effectiveIsCloud) {
+            const usage = getGroqUsage();
+            if (usage >= GROQ_LIMIT) {
+                const limitMessage: MessageType = {
+                    id: (Date.now() + 1.2).toString(),
+                    role: 'assistant',
+                    content: `❌ Cloud Backup limit reached (${GROQ_LIMIT}/${GROQ_LIMIT}). Please switch back to local models or check your Ollama connection.`,
+                    timestamp: new Date(),
+                };
+                setMessages(prev => [...prev, limitMessage]);
+                return;
+            }
         }
 
         setIsLoading(true);
@@ -58,8 +110,8 @@ export default function ChatInterface({ chunks, selectedModel }: ChatInterfacePr
 
         // Dynamic import for toast
         const { toast } = await import('react-hot-toast');
-        const loadingToast = toast.loading(`Waking up ${selectedModel}...`, {
-            icon: '🧠',
+        const loadingToast = toast.loading(`${effectiveIsCloud ? 'Cloud' : 'Local'} AI is thinking...`, {
+            icon: effectiveIsCloud ? '☁️' : '🧠',
         });
 
         try {
@@ -73,20 +125,30 @@ export default function ChatInterface({ chunks, selectedModel }: ChatInterfacePr
             // Build prompt
             const prompt = buildPrompt(question, relevantChunks);
 
-            // Query Ollama with streaming
+            // Query logic
             let fullResponse = '';
             let hasReceivedFirstToken = false;
 
-            await queryOllama(prompt, selectedModel, (chunk) => {
-                if (!hasReceivedFirstToken) {
-                    hasReceivedFirstToken = true;
-                    toast.success(`${selectedModel} loaded!`, {
-                        id: loadingToast,
-                    });
-                }
-                fullResponse += chunk;
-                setStreamingContent(fullResponse);
-            });
+            if (effectiveIsCloud) {
+                await queryGroq(prompt, effectiveModel, (chunk: string) => {
+                    if (!hasReceivedFirstToken) {
+                        hasReceivedFirstToken = true;
+                        toast.success(`Cloud AI responding!`, { id: loadingToast });
+                    }
+                    fullResponse += chunk;
+                    setStreamingContent(fullResponse);
+                });
+                incrementGroqUsage();
+            } else {
+                await queryOllama(prompt, effectiveModel, (chunk: string) => {
+                    if (!hasReceivedFirstToken) {
+                        hasReceivedFirstToken = true;
+                        toast.success(`${effectiveModel} loaded!`, { id: loadingToast });
+                    }
+                    fullResponse += chunk;
+                    setStreamingContent(fullResponse);
+                });
+            }
 
             // Add assistant message
             const assistantMessage: MessageType = {
@@ -105,7 +167,7 @@ export default function ChatInterface({ chunks, selectedModel }: ChatInterfacePr
 
             // Suggest switching models if it's a memory issue
             if (displayError.toLowerCase().includes('memory')) {
-                displayError += '\n\n💡 Tip: This model might be too heavy for your system. Try switching to "Gemma 2B" in the selector above for a faster, lighter experience.';
+                displayError += '\n\n💡 Tip: This model might be too heavy for your system. Try switching to "Gemma 2B" or "Groq Cloud" in the selector above.';
             }
 
             const errorMessage: MessageType = {
@@ -146,15 +208,26 @@ export default function ChatInterface({ chunks, selectedModel }: ChatInterfacePr
             {/* Status Header */}
             <div className="bg-white border-b px-4 py-2 flex justify-between items-center text-xs text-gray-500">
                 <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    <span>Ollama URL: {currentUrl}</span>
+                    {isCloudMode ? (
+                        <>
+                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                            <span className="font-medium text-blue-600">Groq Cloud Active • {getGroqUsage()}/{GROQ_LIMIT} Used</span>
+                        </>
+                    ) : (
+                        <>
+                            <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                            <span className="truncate max-w-[150px] sm:max-w-none">Ollama URL: {currentUrl}</span>
+                        </>
+                    )}
                 </div>
-                <button
-                    onClick={handleUrlChange}
-                    className="text-blue-600 hover:text-blue-800 hover:underline"
-                >
-                    Change
-                </button>
+                {!isCloudMode && (
+                    <button
+                        onClick={handleUrlChange}
+                        className="text-blue-600 hover:text-blue-800 hover:underline shrink-0"
+                    >
+                        Change
+                    </button>
+                )}
             </div>
 
             {/* Messages area */}
