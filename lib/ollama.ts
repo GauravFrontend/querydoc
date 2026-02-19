@@ -21,7 +21,16 @@ export async function queryOllama(
         });
 
         if (!response.ok) {
-            throw new Error(`Ollama request failed: ${response.statusText}`);
+            let errorMessage = `Ollama request failed: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.error) {
+                    errorMessage = errorData.error;
+                }
+            } catch (e) {
+                // Ignore parsing error, use default statusText message
+            }
+            throw new Error(errorMessage);
         }
 
         const reader = response.body?.getReader();

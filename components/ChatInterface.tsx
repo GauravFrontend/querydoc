@@ -101,10 +101,17 @@ export default function ChatInterface({ chunks, selectedModel }: ChatInterfacePr
             setStreamingContent('');
         } catch (error) {
             toast.error('Failed to get answer', { id: loadingToast });
+            let displayError = error instanceof Error ? error.message : 'An unknown error occurred';
+
+            // Suggest switching models if it's a memory issue
+            if (displayError.toLowerCase().includes('memory')) {
+                displayError += '\n\n💡 Tip: This model might be too heavy for your system. Try switching to "Gemma 2B" in the selector above for a faster, lighter experience.';
+            }
+
             const errorMessage: MessageType = {
                 id: (Date.now() + 3).toString(),
                 role: 'assistant',
-                content: `❌ Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`,
+                content: displayError,
                 timestamp: new Date(),
             };
             setMessages(prev => [...prev, errorMessage]);
