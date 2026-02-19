@@ -38,6 +38,31 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, streamingContent]);
 
+    // Restore messages on mount
+    useEffect(() => {
+        const saved = localStorage.getItem('querydoc_messages');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                // Convert string dates back to Date objects
+                const formatted = parsed.map((m: any) => ({
+                    ...m,
+                    timestamp: new Date(m.timestamp)
+                }));
+                setMessages(formatted);
+            } catch (e) {
+                console.error('Failed to parse saved messages:', e);
+            }
+        }
+    }, []);
+
+    // Save messages on change
+    useEffect(() => {
+        if (messages.length > 0) {
+            localStorage.setItem('querydoc_messages', JSON.stringify(messages));
+        }
+    }, [messages]);
+
     const processQuestion = async (question: string) => {
         if (!question.trim() || isLoading) return;
 
@@ -188,7 +213,7 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
         const handleAskAI = (event: any) => {
             const prompt = event.detail;
             if (prompt) {
-                setInput(prompt);
+                setInput(''); // Clear input box immediately
                 processQuestion(prompt);
             }
         };
@@ -286,7 +311,7 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
             <div className="border-t border-gray-200 bg-white p-4">
                 <form
                     onSubmit={handleSubmit}
-                    className="relative flex flex-col bg-white border-2 border-gray-200 rounded-2xl focus-within:border-purple-500/50 transition-all shadow-sm"
+                    className="relative flex flex-col bg-white border-2 border-gray-200 rounded-2xl focus-within:border-blue-500/50 transition-all shadow-sm"
                 >
                     <textarea
                         value={input}
@@ -323,26 +348,26 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                                 <button
                                     type="button"
                                     onClick={() => onModelChange?.('gemma2:2b')}
-                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${!isCloudMode ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500'}`}
+                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${!isCloudMode ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
                                 >
                                     Fast
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => onModelChange?.('llama-3.1-8b-instant')}
-                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${isCloudMode ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500'}`}
+                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${isCloudMode ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}
                                 >
                                     Quality
                                 </button>
                             </div>
 
-                            <button type="button" className="p-1.5 text-gray-400 hover:text-purple-600 bg-gray-50 rounded-lg border border-gray-200 transition-colors">
+                            <button type="button" className="p-1.5 text-gray-400 hover:text-blue-600 bg-gray-50 rounded-lg border border-gray-200 transition-colors">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                 </svg>
                             </button>
 
-                            <button type="button" className="p-1.5 text-gray-400 hover:text-purple-600 bg-gray-50 rounded-lg border border-gray-200 transition-colors">
+                            <button type="button" className="p-1.5 text-gray-400 hover:text-blue-600 bg-gray-50 rounded-lg border border-gray-200 transition-colors">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                                 </svg>
@@ -353,8 +378,8 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                             type="submit"
                             disabled={isLoading || !input.trim()}
                             className="
-                                p-2.5 bg-purple-600 text-white rounded-xl font-medium
-                                hover:bg-purple-700 active:scale-95
+                                p-2.5 bg-blue-600 text-white rounded-xl font-medium
+                                hover:bg-blue-700 active:scale-95
                                 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed
                                 transition-all
                             "

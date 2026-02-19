@@ -7,6 +7,9 @@ import HighlightLayer from './pdf/HighlightLayer';
 import QuickActions from './pdf/QuickActions';
 import { SelectionData, HighlightArea } from '@/types';
 
+// Initialize PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+
 interface PDFViewerProps {
     file: File;
 }
@@ -28,10 +31,14 @@ export default function PDFViewer({ file }: PDFViewerProps) {
     // Load PDF
     useEffect(() => {
         const loadPDF = async () => {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            setPdfDoc(pdf);
-            setNumPages(pdf.numPages);
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                setPdfDoc(pdf);
+                setNumPages(pdf.numPages);
+            } catch (err) {
+                console.error('Error loading PDF:', err);
+            }
         };
 
         loadPDF();
@@ -61,7 +68,6 @@ export default function PDFViewer({ file }: PDFViewerProps) {
                 canvas.style.height = Math.floor(viewport.height) + "px";
 
                 // Reset transform matrix to identity before rendering
-                // This fixes potential mirroring issues from previous renders
                 context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
 
                 const renderContext = {
@@ -219,7 +225,7 @@ export default function PDFViewer({ file }: PDFViewerProps) {
                                 navigator.clipboard.writeText(selection.text);
                                 setSelection(null);
                             }}
-                            onHighlight={(color) => {
+                            onHighlight={(color: string) => {
                                 if (!pageWrapperRef.current) return;
                                 const containerRect = pageWrapperRef.current.getBoundingClientRect();
                                 const newHighlight: HighlightArea = {
@@ -227,7 +233,7 @@ export default function PDFViewer({ file }: PDFViewerProps) {
                                     pageNumber: currentPage,
                                     text: selection.text,
                                     color,
-                                    rects: selection.rects.map(r => ({
+                                    rects: selection.rects.map((r: any) => ({
                                         top: r.top - containerRect.top,
                                         left: r.left - containerRect.left,
                                         width: r.width,
@@ -238,7 +244,7 @@ export default function PDFViewer({ file }: PDFViewerProps) {
                                 setSelection(null);
                                 window.getSelection()?.removeAllRanges();
                             }}
-                            onAction={(action) => {
+                            onAction={(action: string) => {
                                 let prompt = '';
                                 if (action === 'explain') prompt = `Explain this part of the document: "${selection.text}"`;
                                 else if (action === 'summarize') prompt = `Summarize this section: "${selection.text}"`;

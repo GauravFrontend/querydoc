@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import UploadZone from '@/components/UploadZone';
 // Dynamically import PDFViewer to avoid SSR issues with canvas/pdfjs
@@ -8,6 +8,7 @@ const PDFViewer = dynamic(() => import('@/components/PDFViewer'), { ssr: false }
 import ChatInterface from '@/components/ChatInterface';
 import ModelSelector from '@/components/ModelSelector';
 import { Chunk, PageText } from '@/types';
+import { savePDF, getPDF, saveState, getState, clearStorage } from '@/lib/storage';
 
 export default function Home() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -20,6 +21,40 @@ export default function Home() {
   const [showDebug, setShowDebug] = useState(false);
   const [ocrPendingFile, setOcrPendingFile] = useState<File | null>(null);
   const [ocrStatus, setOcrStatus] = useState<{ page: number, total: number, status: string } | null>(null);
+  const [isRestoring, setIsRestoring] = useState(true);
+
+  // Restore state on mount
+  useEffect(() => {
+    const restore = async () => {
+      try {
+        const savedState = getState();
+        const savedFile = await getPDF();
+        if (savedState && savedFile) {
+          setPdfFile(savedFile);
+          setChunks(savedState.chunks);
+          setExtractedPages(savedState.extractedPages);
+          setSelectedModel(savedState.selectedModel);
+        }
+      } catch (e) {
+        console.error('Failed to restore state:', e);
+      } finally {
+        setIsRestoring(false);
+      }
+    };
+    restore();
+  }, []);
+
+  // Save state when it changes
+  useEffect(() => {
+    if (!isRestoring && pdfFile && chunks.length > 0) {
+      saveState({
+        chunks,
+        extractedPages,
+        selectedModel
+      });
+      savePDF(pdfFile);
+    }
+  }, [pdfFile, chunks, extractedPages, selectedModel, isRestoring]);
 
   const handleFileSelect = async (file: File) => {
     setError(null);
@@ -117,6 +152,7 @@ export default function Home() {
   };
 
   const handleNewDocument = () => {
+    clearStorage();
     setPdfFile(null);
     setChunks([]);
     setExtractedPages([]);
@@ -129,6 +165,13 @@ export default function Home() {
 
   // No PDF layout
   if (!pdfFile && !ocrPendingFile) {
+    if (isRestoring) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      );
+    }
     return (
       <>
         <UploadZone onFileSelect={handleFileSelect} />
