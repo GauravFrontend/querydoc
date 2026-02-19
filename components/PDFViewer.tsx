@@ -169,7 +169,7 @@ export default function PDFViewer({ file }: PDFViewerProps) {
             {/* PDF Canvas */}
             <div
                 ref={containerRef}
-                className="flex-1 overflow-auto p-4 flex items-start justify-center"
+                className="flex-1 overflow-auto p-4 flex items-start justify-center min-h-0"
             >
                 <div className="bg-white shadow-lg">
                     <canvas ref={canvasRef} className="max-w-full h-auto" />

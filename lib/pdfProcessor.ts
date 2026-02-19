@@ -15,7 +15,8 @@ export async function extractTextFromPDF(file: File): Promise<PageText[]> {
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const pages: PageText[] = [];
 
-    for (let i = 1; i <= pdf.numPages; i++) {
+    const pagesToProcess = Math.min(pdf.numPages, 5);
+    for (let i = 1; i <= pagesToProcess; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
         const text = textContent.items

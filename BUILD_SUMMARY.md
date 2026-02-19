@@ -1,8 +1,8 @@
-# DocQuery - Build Summary
+# QueryDoc - Build Summary
 
 ## ✅ Build Status: COMPLETE
 
-Your DocQuery application has been successfully built and is now running!
+Your QueryDoc application has been successfully built and is now running!
 
 ### 🚀 Server Status
 - **Development Server**: Running at http://localhost:3000
@@ -224,7 +224,7 @@ Check: Browser console (F12) for errors
 ## 📁 File Tree
 
 ```
-docquery/
+QueryDoc/
 ├── app/
 │   ├── favicon.ico
 │   ├── globals.css              ← Tailwind CSS v4
@@ -272,7 +272,7 @@ docquery/
 
 ## 🎉 Ready to Use!
 
-Your DocQuery application is fully functional and ready for testing. 
+Your QueryDoc application is fully functional and ready for testing. 
 
 **Start here**: http://localhost:3000
 

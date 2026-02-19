@@ -73,7 +73,8 @@ export default function Home() {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
               <h3 className="text-xl font-semibold text-gray-800">Processing PDF...</h3>
-              <p className="text-gray-600">Extracting and analyzing text</p>
+              <p className="text-gray-600">Extracting text from the first 5 pages</p>
+              <div className="text-xs text-amber-600 font-medium">Demo Version Limitation</div>
             </div>
           </div>
         )}
@@ -104,13 +105,13 @@ export default function Home() {
 
   // Main interface with PDF loaded
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-[100dvh] flex flex-col bg-white overflow-hidden">
       {/* Header */}
       <header className="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
-              DocQuery
+              QueryDoc
             </h1>
             <button
               onClick={handleNewDocument}
@@ -152,22 +153,22 @@ export default function Home() {
       </header>
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Desktop: Split view */}
-        <div className="hidden md:flex w-full">
+        <div className="hidden md:flex w-full h-full">
           {/* PDF viewer - 60% */}
-          <div className="w-3/5 border-r border-gray-200">
+          <div className="w-3/5 border-r border-gray-200 h-full">
             <PDFViewer file={pdfFile} />
           </div>
 
           {/* Chat - 40% */}
-          <div className="w-2/5">
+          <div className="w-2/5 h-full">
             <ChatInterface chunks={chunks} selectedModel={selectedModel} />
           </div>
         </div>
 
         {/* Mobile: Tabbed view */}
-        <div className="md:hidden w-full">
+        <div className="md:hidden w-full h-full">
           {showMobileView === 'pdf' ? (
             <PDFViewer file={pdfFile} />
           ) : (

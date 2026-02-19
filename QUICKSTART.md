@@ -1,8 +1,8 @@
-# DocQuery - Quick Start Guide
+# QueryDoc - Quick Start Guide
 
 ## ✅ Installation Complete!
 
-Your DocQuery application has been successfully created and is ready to use!
+Your QueryDoc application has been successfully created and is ready to use!
 
 ## 🚀 Current Status
 
@@ -37,7 +37,7 @@ Or check if it's accessible:
 curl http://localhost:11434/api/tags
 ```
 
-## 🎯 How to Use DocQuery
+## 🎯 How to Use QueryDoc
 
 1. **Open the Application**
    - Navigate to http://localhost:3000 in your browser
@@ -159,7 +159,7 @@ On smaller screens:
 ## 📁 Project File Structure
 
 ```
-docquery/
+QueryDoc/
 ├── app/
 │   ├── page.tsx          → Main component with upload/chat logic
 │   ├── layout.tsx        → Root layout and metadata
@@ -243,7 +243,7 @@ If you encounter issues:
 4. Try with a simple, small PDF first
 5. Check that you're using a modern browser
 
-## ✨ Enjoy DocQuery!
+## ✨ Enjoy QueryDoc!
 
 You now have a fully functional, privacy-focused PDF Q&A tool running locally on your machine. No subscriptions, no API keys, no cloud services required!
 

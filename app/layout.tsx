@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DocQuery - Local AI-Powered PDF Q&A",
+  title: "QueryDoc - Local AI-Powered PDF Q&A",
   description: "Ask questions to your documents privately with 100% local AI processing",
 };
 

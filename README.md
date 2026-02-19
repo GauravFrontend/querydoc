@@ -1,8 +1,8 @@
-# DocQuery - Local AI-Powered PDF Q&A
+# QueryDoc - Local AI-Powered PDF Q&A
 
 Ask questions to your PDF documents privately with 100% local AI processing using Ollama.
 
-![DocQuery](https://img.shields.io/badge/Next.js-14+-black?style=flat-square&logo=next.js)
+![QueryDoc](https://img.shields.io/badge/Next.js-14+-black?style=flat-square&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5+-blue?style=flat-square&logo=typescript)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
@@ -19,7 +19,7 @@ Ask questions to your PDF documents privately with 100% local AI processing usin
 
 ## 🚀 Prerequisites
 
-Before running DocQuery, ensure you have:
+Before running QueryDoc, ensure you have:
 
 1. **Node.js 18+** installed
 2. **Ollama** installed and running locally
@@ -45,7 +45,7 @@ curl http://localhost:11434/api/tags
 1. Clone the repository and navigate to the project:
 
 ```bash
-cd docquery
+cd QueryDoc
 ```
 
 2. Install dependencies:
@@ -80,7 +80,7 @@ npm run dev
 ## 🏗️ Project Structure
 
 ```
-docquery/
+QueryDoc/
 ├── app/
 │   ├── page.tsx              # Main app component
 │   ├── layout.tsx            # Root layout
