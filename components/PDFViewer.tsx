@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-// @ts-ignore
 import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
+import TextLayer from './pdf/TextLayer';
+import HighlightLayer from './pdf/HighlightLayer';
+import QuickActions from './pdf/QuickActions';
+import { SelectionData, HighlightArea } from '@/types';
 
 interface PDFViewerProps {
     file: File;
@@ -15,6 +18,12 @@ export default function PDFViewer({ file }: PDFViewerProps) {
     const [pdfDoc, setPdfDoc] = useState<any>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const pageWrapperRef = useRef<HTMLDivElement>(null);
+
+    const [pageProxy, setPageProxy] = useState<any>(null);
+    const [viewport, setViewport] = useState<any>(null);
+    const [selection, setSelection] = useState<SelectionData | null>(null);
+    const [savedHighlights, setSavedHighlights] = useState<HighlightArea[]>([]);
 
     // Load PDF
     useEffect(() => {
@@ -62,6 +71,12 @@ export default function PDFViewer({ file }: PDFViewerProps) {
 
                 renderTask = page.render(renderContext);
                 await renderTask.promise;
+
+                // Store page proxy and viewport for the text layer
+                setPageProxy(page);
+                setViewport(viewport);
+                // Clear selection when changing page/zoom
+                setSelection(null);
             } catch (error: any) {
                 // Ignore cancellation errors
                 if (error.name !== 'RenderingCancelledException') {
@@ -169,10 +184,75 @@ export default function PDFViewer({ file }: PDFViewerProps) {
             {/* PDF Canvas */}
             <div
                 ref={containerRef}
-                className="flex-1 overflow-auto p-4 flex items-start justify-center min-h-0"
+                className="flex-1 overflow-auto p-4 flex items-start justify-center min-h-0 relative select-none"
             >
-                <div className="bg-white shadow-lg">
+                <div
+                    ref={pageWrapperRef}
+                    className="bg-white shadow-lg relative"
+                    style={viewport ? { width: viewport.width, height: viewport.height } : {}}
+                >
                     <canvas ref={canvasRef} className="max-w-full h-auto" />
+
+                    {/* Text Selection Layer */}
+                    {pageProxy && viewport && (
+                        <TextLayer
+                            page={pageProxy}
+                            viewport={viewport}
+                            scale={scale}
+                            pageNumber={currentPage}
+                            onSelectionChange={setSelection}
+                        />
+                    )}
+
+                    {/* Highlight Layer */}
+                    <HighlightLayer
+                        rects={selection?.rects || []}
+                        containerRef={pageWrapperRef}
+                        persistentHighlights={savedHighlights.filter(h => h.pageNumber === currentPage)}
+                    />
+
+                    {/* Quick Actions Menu */}
+                    {selection && selection.rects.length > 0 && (
+                        <QuickActions
+                            selection={selection}
+                            onCopy={() => {
+                                navigator.clipboard.writeText(selection.text);
+                                setSelection(null);
+                            }}
+                            onHighlight={(color) => {
+                                if (!pageWrapperRef.current) return;
+                                const containerRect = pageWrapperRef.current.getBoundingClientRect();
+                                const newHighlight: HighlightArea = {
+                                    id: Date.now().toString(),
+                                    pageNumber: currentPage,
+                                    text: selection.text,
+                                    color,
+                                    rects: selection.rects.map(r => ({
+                                        top: r.top - containerRect.top,
+                                        left: r.left - containerRect.left,
+                                        width: r.width,
+                                        height: r.height
+                                    }))
+                                };
+                                setSavedHighlights(prev => [...prev, newHighlight]);
+                                setSelection(null);
+                                window.getSelection()?.removeAllRanges();
+                            }}
+                            onAction={(action) => {
+                                let prompt = '';
+                                if (action === 'explain') prompt = `Explain this part of the document: "${selection.text}"`;
+                                else if (action === 'summarize') prompt = `Summarize this section: "${selection.text}"`;
+                                else if (action === 'rewrite') prompt = `Rewrite this more clearly: "${selection.text}"`;
+                                else if (action === 'ask') prompt = `Regarding this: "${selection.text}", [your question]`;
+
+                                const event = new CustomEvent('ask-ai', { detail: prompt });
+                                window.dispatchEvent(event);
+                                setSelection(null);
+                                window.getSelection()?.removeAllRanges();
+                            }}
+                            onClose={() => setSelection(null)}
+                        />
+                    )}
                 </div>
             </div>
         </div>

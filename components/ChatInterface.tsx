@@ -38,6 +38,20 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, streamingContent]);
 
+    // Handle "Ask AI" from PDF selection
+    useEffect(() => {
+        const handleAskAI = (event: any) => {
+            const text = event.detail;
+            if (text) {
+                setInput(`What does this mean: "${text}"`);
+                // Focus the input field if possible
+            }
+        };
+
+        window.addEventListener('ask-ai', handleAskAI);
+        return () => window.removeEventListener('ask-ai', handleAskAI);
+    }, []);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -122,8 +136,14 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                 throw new Error('No relevant content found in the document.');
             }
 
-            // Build prompt
-            const prompt = buildPrompt(question, relevantChunks);
+            // Get recent history (last 4 messages) to provide context for follow-up questions
+            const history = messages.slice(-4).map(m => ({
+                role: m.role,
+                content: m.content
+            }));
+
+            // Build prompt with history
+            const prompt = buildPrompt(question, relevantChunks, history);
 
             // Query logic
             let fullResponse = '';

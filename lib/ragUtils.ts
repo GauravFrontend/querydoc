@@ -39,21 +39,32 @@ export function findRelevantChunks(
 }
 
 /**
- * Build a prompt with context for the LLM
+ * Build a prompt with context and history for the LLM
  */
-export function buildPrompt(question: string, chunks: Chunk[]): string {
+export function buildPrompt(question: string, chunks: Chunk[], history?: { role: string, content: string }[]): string {
     const contextParts = chunks.map((chunk, index) =>
         `[Page ${chunk.pageNumber}]\n${chunk.text}`
     );
 
     const context = contextParts.join('\n\n---\n\n');
 
-    return `You are a document analysis assistant. Answer questions based ONLY on the provided text. Include the page number where you found the information.
+    let historyText = '';
+    if (history && history.length > 0) {
+        historyText = 'Previous Conversation:\n' + history.map(m => `${m.role === 'user' ? 'Question' : 'Answer'}: ${m.content}`).join('\n') + '\n\n';
+    }
 
-Context from document:
+    return `You are a professional document analysis assistant. 
+Review the provided context and conversation history to answer the final question accurately. 
+Answer based ONLY on the provided document text. 
+If the question is a follow-up, use the history to understand the context.
+Always cite the page numbers used.
+
+---
+DOCUMENT CONTEXT:
 ${context}
+---
 
-Question: ${question}
+${historyText}Final Question: ${question}
 
 Answer:`;
 }

@@ -18,6 +18,15 @@ export interface Message {
 }
 
 export interface HighlightArea {
+    id: string;
     pageNumber: number;
     text: string;
+    rects: { top: number; left: number; width: number; height: number }[];
+    color?: string;
+}
+
+export interface SelectionData {
+    text: string;
+    rects: DOMRect[];
+    pageNumber: number;
 }
