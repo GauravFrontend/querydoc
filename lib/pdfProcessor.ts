@@ -48,21 +48,28 @@ export async function extractTextFromPDFWithOCR(
 
     const pagesToProcess = Math.min(totalPages, 5);
     const worker = await createWorker('eng');
+    console.log('Tesseract Worker created for language: eng');
 
     try {
         for (let i = 1; i <= pagesToProcess; i++) {
+            console.log(`Processing Page ${i}...`);
             if (onProgress) onProgress({ page: i, total: pagesToProcess, status: 'rendering' });
 
             const page = await pdf.getPage(i);
             const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better OCR
+            console.log(`Page ${i} viewport scale 2.0: ${viewport.width}x${viewport.height}`);
 
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
-            if (!context) continue;
+            if (!context) {
+                console.error(`Failed to get canvas context for page ${i}`);
+                continue;
+            }
 
             canvas.height = viewport.height;
             canvas.width = viewport.width;
 
+            console.log(`Rendering Page ${i} to canvas...`);
             await page.render({
                 canvasContext: context,
                 viewport: viewport,
@@ -70,15 +77,21 @@ export async function extractTextFromPDFWithOCR(
 
             if (onProgress) onProgress({ page: i, total: pagesToProcess, status: 'ocr' });
 
+            console.log(`Running Tesseract recognize on Page ${i}...`);
             const { data: { text } } = await worker.recognize(canvas);
+            console.log(`Page ${i} OCR Result Length: ${text.length} characters`);
 
             pages.push({
                 pageNumber: i,
                 text: text.trim(),
             });
         }
+    } catch (ocrError) {
+        console.error('CRITICAL: Error during OCR loop:', ocrError);
+        throw ocrError;
     } finally {
         await worker.terminate();
+        console.log('Tesseract Worker terminated');
     }
 
     return { pages, totalPages };
