@@ -38,27 +38,8 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, streamingContent]);
 
-    // Handle "Ask AI" from PDF selection
-    useEffect(() => {
-        const handleAskAI = (event: any) => {
-            const text = event.detail;
-            if (text) {
-                setInput(`What does this mean: "${text}"`);
-                // Focus the input field if possible
-            }
-        };
-
-        window.addEventListener('ask-ai', handleAskAI);
-        return () => window.removeEventListener('ask-ai', handleAskAI);
-    }, []);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!input.trim() || isLoading) return;
-
-        const question = input.trim();
-        setInput('');
+    const processQuestion = async (question: string) => {
+        if (!question.trim() || isLoading) return;
 
         // Add user message
         const userMessage: MessageType = {
@@ -89,7 +70,7 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                     return;
                 }
 
-                // Switch to cloud mode automatically - use the fastest Llama model for fallback
+                // Switch to cloud mode automatically
                 effectiveModel = 'llama-3.1-8b-instant';
                 effectiveIsCloud = true;
                 if (onModelChange) onModelChange('llama-3.1-8b-instant');
@@ -125,7 +106,7 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
         // Dynamic import for toast
         const { toast } = await import('react-hot-toast');
         const loadingToast = toast.loading(`${effectiveIsCloud ? 'Cloud' : 'Local'} AI is thinking...`, {
-            icon: effectiveIsCloud ? '☁️' : '🧠',
+            id: effectiveIsCloud ? '☁️' : '🧠',
         });
 
         try {
@@ -136,13 +117,13 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                 throw new Error('No relevant content found in the document.');
             }
 
-            // Get recent history (last 4 messages) to provide context for follow-up questions
+            // Get recent history
             const history = messages.slice(-4).map(m => ({
                 role: m.role,
                 content: m.content
             }));
 
-            // Build prompt with history
+            // Build prompt
             const prompt = buildPrompt(question, relevantChunks, history);
 
             // Query logic
@@ -185,7 +166,6 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
             toast.error('Failed to get answer', { id: loadingToast });
             let displayError = error instanceof Error ? error.message : 'An unknown error occurred';
 
-            // Suggest switching models if it's a memory issue
             if (displayError.toLowerCase().includes('memory')) {
                 displayError += '\n\n💡 Tip: This model might be too heavy for your system. Try switching to "Gemma 2B" or "Groq Cloud" in the selector above.';
             }
@@ -203,6 +183,27 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
         }
     };
 
+    // Handle "Ask AI" from PDF selection
+    useEffect(() => {
+        const handleAskAI = (event: any) => {
+            const prompt = event.detail;
+            if (prompt) {
+                setInput(prompt);
+                processQuestion(prompt);
+            }
+        };
+
+        window.addEventListener('ask-ai', handleAskAI);
+        return () => window.removeEventListener('ask-ai', handleAskAI);
+    }, [chunks, messages, selectedModel, isCloudMode]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const question = input.trim();
+        setInput('');
+        await processQuestion(question);
+    };
+
     const [currentUrl, setCurrentUrl] = useState('');
 
     useEffect(() => {
@@ -214,10 +215,8 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
         if (newUrl) {
             localStorage.setItem('ollama_url', newUrl);
             setCurrentUrl(newUrl);
-            // Clear previous error messages if any
             setMessages(prev => prev.filter(m => !m.content.includes('Cannot connect to Ollama')));
         } else if (newUrl === '') {
-            // Reset to default
             localStorage.removeItem('ollama_url');
             setCurrentUrl(getBaseUrl());
         }
@@ -258,8 +257,8 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                             <svg className="w-16 h-16 mx-auto text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                             </svg>
-                            <p className="text-lg font-medium">Ask a question about your document</p>
-                            <p className="text-sm">I'll search through the PDF and provide answers with page citations.</p>
+                            <p className="text-base font-medium">Ask a question about your document</p>
+                            <p className="text-xs">I'll search through the PDF and provide answers with page citations.</p>
                         </div>
                     </div>
                 )}
@@ -272,7 +271,7 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                 {streamingContent && (
                     <div className="flex justify-start mb-4">
                         <div className="max-w-[80%] rounded-2xl px-4 py-3 shadow-sm bg-white text-gray-800 border border-gray-200">
-                            <div className="whitespace-pre-wrap break-words">
+                            <div className="text-sm whitespace-pre-wrap break-words">
                                 {streamingContent}
                                 <span className="inline-block w-2 h-4 bg-blue-600 ml-1 animate-pulse" />
                             </div>
@@ -285,39 +284,93 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
 
             {/* Input area */}
             <div className="border-t border-gray-200 bg-white p-4">
-                <form onSubmit={handleSubmit} className="flex gap-2">
-                    <input
-                        type="text"
+                <form
+                    onSubmit={handleSubmit}
+                    className="relative flex flex-col bg-white border-2 border-gray-200 rounded-2xl focus-within:border-purple-500/50 transition-all shadow-sm"
+                >
+                    <textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSubmit(e as any);
+                            }
+                        }}
                         placeholder="Ask a question about this document..."
                         disabled={isLoading}
+                        rows={1}
+                        style={{ maxHeight: '340px' }}
                         className="
-              flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl
-              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-              disabled:bg-gray-100 disabled:cursor-not-allowed
-              transition-all
-            "
+                            w-full px-4 py-3 bg-transparent resize-none
+                            focus:outline-none disabled:cursor-not-allowed
+                            min-h-[50px] overflow-y-auto custom-scrollbar
+                            text-sm
+                        "
+                        ref={(el) => {
+                            if (el) {
+                                el.style.height = 'auto';
+                                el.style.height = `${Math.min(el.scrollHeight, 340)}px`;
+                            }
+                        }}
                     />
-                    <button
-                        type="submit"
-                        disabled={isLoading || !input.trim()}
-                        className="
-              px-6 py-3 bg-blue-600 text-white rounded-xl font-medium
-              hover:bg-blue-700 active:scale-95
-              disabled:bg-gray-300 disabled:cursor-not-allowed
-              transition-all
-            "
-                    >
-                        {isLoading ? (
-                            <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                            </svg>
-                        ) : (
-                            'Send'
-                        )}
-                    </button>
+
+                    {/* Toolbar */}
+                    <div className="flex items-center justify-between px-3 pb-3">
+                        <div className="flex items-center gap-2">
+                            {/* Fast/Quality Toggle Demo */}
+                            <div className="flex items-center p-0.5 bg-gray-100 rounded-lg">
+                                <button
+                                    type="button"
+                                    onClick={() => onModelChange?.('gemma2:2b')}
+                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${!isCloudMode ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500'}`}
+                                >
+                                    Fast
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onModelChange?.('llama-3.1-8b-instant')}
+                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${isCloudMode ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500'}`}
+                                >
+                                    Quality
+                                </button>
+                            </div>
+
+                            <button type="button" className="p-1.5 text-gray-400 hover:text-purple-600 bg-gray-50 rounded-lg border border-gray-200 transition-colors">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                            </button>
+
+                            <button type="button" className="p-1.5 text-gray-400 hover:text-purple-600 bg-gray-50 rounded-lg border border-gray-200 transition-colors">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={isLoading || !input.trim()}
+                            className="
+                                p-2.5 bg-purple-600 text-white rounded-xl font-medium
+                                hover:bg-purple-700 active:scale-95
+                                disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed
+                                transition-all
+                            "
+                        >
+                            {isLoading ? (
+                                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                            ) : (
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                                </svg>
+                            )}
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>

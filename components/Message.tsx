@@ -21,7 +21,7 @@ export default function Message({ message }: MessageProps) {
         `}
             >
                 {/* Message content */}
-                <div className="whitespace-pre-wrap break-words">
+                <div className="text-sm whitespace-pre-wrap break-words">
                     {message.content}
                 </div>
 

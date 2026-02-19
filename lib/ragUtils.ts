@@ -10,7 +10,9 @@ function calculateRelevance(question: string, chunk: string): number {
     let score = 0;
     for (const word of questionWords) {
         if (word.length > 3) { // Only count meaningful words
-            const occurrences = (chunkLower.match(new RegExp(word, 'g')) || []).length;
+            // Escape special regex characters to avoid "Invalid regular expression" errors
+            const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const occurrences = (chunkLower.match(new RegExp(escapedWord, 'g')) || []).length;
             score += occurrences;
         }
     }
