@@ -21,6 +21,7 @@ export default function Home() {
   const [showDebug, setShowDebug] = useState(false);
   const [ocrPendingFile, setOcrPendingFile] = useState<File | null>(null);
   const [ocrStatus, setOcrStatus] = useState<{ page: number, total: number, status: string } | null>(null);
+  const [autoOCRCountdown, setAutoOCRCountdown] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [isRestoring, setIsRestoring] = useState(true);
 
@@ -59,10 +60,27 @@ export default function Home() {
     }
   }, [pdfFile, chunks, extractedPages, selectedModel, isRestoring, currentPage]);
 
+  // Auto-run OCR Countdown
+  useEffect(() => {
+    if (autoOCRCountdown === null) return;
+
+    if (autoOCRCountdown > 0) {
+      const timer = setTimeout(() => setAutoOCRCountdown(prev => (prev !== null ? prev - 1 : null)), 1000);
+      return () => clearTimeout(timer);
+    } else {
+      // Countdown finished, run OCR
+      if (ocrPendingFile) {
+        handleRunOCR(ocrPendingFile);
+        setAutoOCRCountdown(null);
+      }
+    }
+  }, [autoOCRCountdown, ocrPendingFile]);
+
   const handleFileSelect = async (file: File) => {
     setError(null);
     setIsProcessing(true);
     setOcrPendingFile(null);
+    setAutoOCRCountdown(null);
 
     try {
       // Dynamically import PDF processor and toast
@@ -97,6 +115,7 @@ export default function Home() {
       if (detectScannedPDF(pages)) {
         setOcrPendingFile(file);
         setIsProcessing(false);
+        setAutoOCRCountdown(3); // Start 3-second countdown
         return;
       }
 
@@ -166,6 +185,7 @@ export default function Home() {
     setShowDebug(false);
     setOcrPendingFile(null);
     setOcrStatus(null);
+    setAutoOCRCountdown(null);
     setCurrentPage(1);
   };
 
@@ -186,86 +206,138 @@ export default function Home() {
     );
   }
 
-  // Scanned PDF Prompt
+  // Scanned PDF Prompt (Auto-Start UI)
   if (ocrPendingFile && !pdfFile) {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-amber-50 p-6 flex flex-col items-center text-center space-y-4">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-gray-800">Scanned Document Detected</h3>
-            <p className="text-gray-600">
-              This PDF appears to be an image or scanned document. We can use OCR (Optical Character Recognition) to extract the text.
-            </p>
-          </div>
-          <div className="p-6 space-y-4">
-            <div className="bg-blue-50 rounded-lg p-4 flex gap-3 text-sm text-blue-700">
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p>OCR happens directly in your browser. This may take a moment depending on your device speed.</p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setOcrPendingFile(null)}
-                className="flex-1 px-4 py-3 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-colors"
-                disabled={isProcessing}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleRunOCR()}
-                className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-200"
-                disabled={isProcessing}
-              >
+      <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 p-4 font-sans">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden animate-fadeIn">
+          <div className="bg-slate-900 p-8 text-white relative overflow-hidden transition-all duration-500">
+            {/* Background Pattern */}
+            <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px]"></div>
+
+            <div className="relative z-10 flex flex-col items-center text-center space-y-4">
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center border backdrop-blur-sm transition-all duration-500 ${isProcessing ? 'bg-blue-500/20 border-blue-400/30' : 'bg-amber-500/20 border-amber-400/30'}`}>
                 {isProcessing ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Processing...
-                  </>
-                ) : 'Run OCR'}
-              </button>
+                  <svg className="w-8 h-8 text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  <svg className="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                )}
+              </div>
+              <div>
+                <h3 className="text-xl font-bold tracking-tight">
+                  {isProcessing ? 'Processing Document' : 'Scanned Document Detected'}
+                </h3>
+                <p className="text-blue-200/80 text-sm mt-1 font-medium">
+                  {isProcessing ? 'Running local OCR engine...' : 'Standard text extraction failed'}
+                </p>
+              </div>
             </div>
-            <p className="text-center text-xs text-gray-400">
-              Only the first 5 pages will be processed in this demo.
-            </p>
+          </div>
+
+          <div className="p-8 space-y-6">
+            {!isProcessing ? (
+              <>
+                {/* Terminal / Info Block */}
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 w-2 h-2 rounded-full bg-amber-500 shrink-0 animate-pulse"></div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">Analysis</p>
+                      <p className="text-sm text-gray-600">The uploaded PDF contains images instead of selectable text.</p>
+                    </div>
+                  </div>
+                  <div className="w-full h-px bg-gray-200"></div>
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 w-2 h-2 rounded-full bg-blue-500 shrink-0"></div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">Action Required</p>
+                      <p className="text-sm text-gray-600">Initiating local OCR engine (Tesseract.js) to convert images to searchable text.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Auto-Start Timer */}
+                <div className="text-center space-y-3">
+                  <div className="flex items-center justify-center gap-2 text-sm font-semibold text-gray-900">
+                    {autoOCRCountdown !== null ? (
+                      <>
+                        <svg className="w-4 h-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Starting automated processing in {autoOCRCountdown}s...</span>
+                      </>
+                    ) : (
+                      <span>Initializing processor...</span>
+                    )}
+                  </div>
+
+                  <div className="w-full bg-gray-100 rounded-full h-1 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-full transition-all duration-1000 ease-linear"
+                      style={{ width: autoOCRCountdown !== null ? `${((3 - autoOCRCountdown) / 3) * 100}%` : '100%' }}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              // Processing State
+              ocrStatus && (
+                <div className="space-y-6 animate-fadeIn">
+                  <div className="relative w-24 h-24 mx-auto">
+                    <svg className="w-full h-full text-blue-600 -rotate-90" viewBox="0 0 36 36">
+                      <path
+                        className="text-gray-100"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                      />
+                      <path
+                        className="text-blue-600 transition-all duration-500 ease-out"
+                        strokeDasharray={`${(ocrStatus.page / ocrStatus.total) * 100}, 100`}
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-bold text-gray-900">
+                        {Math.round((ocrStatus.page / ocrStatus.total) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-center space-y-2">
+                    <h4 className="text-lg font-bold text-gray-900">Extracting Text...</h4>
+                    <p className="text-gray-500 text-sm">
+                      {ocrStatus.status === 'rendering' ? `Preparing page ${ocrStatus.page}` : `Reading page ${ocrStatus.page}`} of {ocrStatus.total}
+                    </p>
+                    <p className="text-xs text-gray-400 italic pt-2">Processing locally on your device</p>
+                  </div>
+                </div>
+              )
+            )}
+
+            <button
+              onClick={() => {
+                setOcrPendingFile(null);
+                setAutoOCRCountdown(null);
+                setIsProcessing(false); // Ensure processing state is reset
+              }}
+              className="w-full py-3 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-xl transition-colors"
+            >
+              Cancel Processing
+            </button>
+
           </div>
         </div>
-
-        {/* OCR Processing Overlay (when triggered from within prompt) */}
-        {isProcessing && ocrStatus && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 text-center space-y-4 shadow-2xl">
-              <div className="relative w-20 h-20 mx-auto">
-                <svg className="w-full h-full text-blue-600 animate-spin" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center text-sm font-bold text-blue-700">
-                  {Math.round((ocrStatus.page / ocrStatus.total) * 100)}%
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-gray-800">Extracting Text...</h3>
-              <p className="text-gray-600">
-                {ocrStatus.status === 'rendering' ? `Preparing page ${ocrStatus.page}...` : `Reading page ${ocrStatus.page}...`}
-              </p>
-              <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                <div
-                  className="bg-gradient-to-r from-blue-500 to-blue-700 h-full transition-all duration-500 ease-out shadow-inner"
-                  style={{ width: `${(ocrStatus.page / ocrStatus.total) * 100}%` }}
-                ></div>
-              </div>
-              <p className="text-xs text-gray-500 italic">This usually takes 2-5 seconds per page</p>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
