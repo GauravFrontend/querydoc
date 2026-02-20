@@ -1,12 +1,23 @@
+export interface TextItem {
+    str: string;
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+}
+
 export interface PageText {
     pageNumber: number;
     text: string;
+    items?: TextItem[];
 }
 
 export interface Chunk {
+    chunkId: string;
     text: string;
     pageNumber: number;
     chunkIndex: number;
+    rects?: { top: number; left: number; width: number; height: number }[];
 }
 
 export interface Message {
@@ -14,6 +25,7 @@ export interface Message {
     role: 'user' | 'assistant';
     content: string;
     pageNumber?: number;
+    sourceChunks?: Chunk[];
     timestamp: Date;
     stats?: {
         eval_count: number;

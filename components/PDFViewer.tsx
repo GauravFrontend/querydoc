@@ -5,7 +5,7 @@ import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
 import TextLayer from './pdf/TextLayer';
 import HighlightLayer from './pdf/HighlightLayer';
 import QuickActions from './pdf/QuickActions';
-import { SelectionData, HighlightArea } from '@/types';
+import { SelectionData, HighlightArea, Chunk } from '@/types';
 
 // Initialize PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -29,6 +29,7 @@ export default function PDFViewer({ file, initialPage = 1, onPageChange }: PDFVi
     const [viewport, setViewport] = useState<any>(null);
     const [selection, setSelection] = useState<SelectionData | null>(null);
     const [savedHighlights, setSavedHighlights] = useState<HighlightArea[]>([]);
+    const [sourceHighlight, setSourceHighlight] = useState<HighlightArea | null>(null);
 
     // Sync currentPage if initialPage changes (e.g., after restoration)
     useEffect(() => {
@@ -36,6 +37,40 @@ export default function PDFViewer({ file, initialPage = 1, onPageChange }: PDFVi
             setCurrentPage(initialPage);
         }
     }, [initialPage]);
+
+    // Listen for jump-to-source event
+    useEffect(() => {
+        const handleJumpToSource = (event: any) => {
+            const chunk = event.detail as Chunk;
+            if (chunk.pageNumber) {
+                setCurrentPage(chunk.pageNumber);
+                if (onPageChange) onPageChange(chunk.pageNumber);
+
+                if (chunk.rects && chunk.rects.length > 0) {
+                    setSourceHighlight({
+                        id: chunk.chunkId || 'source',
+                        pageNumber: chunk.pageNumber,
+                        text: chunk.text,
+                        color: 'rgba(251, 191, 36, 0.4)', // Amber highlight
+                        rects: chunk.rects.map(r => ({
+                            top: r.top * scale,
+                            left: r.left * scale,
+                            width: r.width * scale,
+                            height: r.height * scale
+                        }))
+                    });
+
+                    // Clear after 3 seconds
+                    setTimeout(() => {
+                        setSourceHighlight(null);
+                    }, 3000);
+                }
+            }
+        };
+
+        window.addEventListener('jump-to-source', handleJumpToSource);
+        return () => window.removeEventListener('jump-to-source', handleJumpToSource);
+    }, [scale, onPageChange]);
 
     // Load PDF
     useEffect(() => {
@@ -227,7 +262,10 @@ export default function PDFViewer({ file, initialPage = 1, onPageChange }: PDFVi
                     <HighlightLayer
                         rects={selection?.rects || []}
                         containerRef={pageWrapperRef}
-                        persistentHighlights={savedHighlights.filter(h => h.pageNumber === currentPage)}
+                        persistentHighlights={[
+                            ...savedHighlights.filter(h => h.pageNumber === currentPage),
+                            ...(sourceHighlight?.pageNumber === currentPage ? [sourceHighlight] : [])
+                        ]}
                     />
 
                     {/* Quick Actions Menu */}

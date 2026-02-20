@@ -156,11 +156,19 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
         });
 
         try {
-            // Find relevant chunks
-            const relevantChunks = findRelevantChunks(question, chunks, 3);
+            // Find relevant chunks (top 8 because chunks are now smaller for precise highlighting)
+            const relevantChunks = findRelevantChunks(question, chunks, 8);
 
             if (relevantChunks.length === 0) {
                 throw new Error('No relevant content found in the document.');
+            }
+
+            // Auto-navigate to the most relevant chunk
+            if (relevantChunks.length > 0) {
+                setTimeout(() => {
+                    const event = new CustomEvent('jump-to-source', { detail: relevantChunks[0] });
+                    window.dispatchEvent(event);
+                }, 100); // Small delay to allow UI to transition if needed
             }
 
             // Get recent history
@@ -205,7 +213,8 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                 id: (Date.now() + 2).toString(),
                 role: 'assistant',
                 content: fullResponse,
-                pageNumber: relevantChunks[0].pageNumber,
+                pageNumber: relevantChunks[0]?.pageNumber,
+                sourceChunks: relevantChunks,
                 timestamp: new Date(),
                 stats: responseStats
             };

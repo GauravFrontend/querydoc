@@ -20,7 +20,22 @@ export async function extractTextFromPDF(file: File): Promise<{ pages: PageText[
     const pagesToProcess = Math.min(totalPages, 5);
     for (let i = 1; i <= pagesToProcess; i++) {
         const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.0 });
         const textContent = await page.getTextContent();
+
+        const items = textContent.items.map((item: any) => {
+            const tx = item.transform;
+            // pdf.js uses bottom-left origin for y. Calculate approx top.
+            const top = viewport.height - tx[5] - tx[3];
+            return {
+                str: item.str,
+                left: tx[4],
+                top: top,
+                width: item.width || 10,
+                height: tx[3] || 10
+            };
+        });
+
         const text = textContent.items
             .map((item: any) => item.str)
             .join(' ');
@@ -28,6 +43,7 @@ export async function extractTextFromPDF(file: File): Promise<{ pages: PageText[
         pages.push({
             pageNumber: i,
             text: text.trim(),
+            items
         });
     }
 
@@ -78,12 +94,21 @@ export async function extractTextFromPDFWithOCR(
             if (onProgress) onProgress({ page: i, total: pagesToProcess, status: 'ocr' });
 
             console.log(`Running Tesseract recognize on Page ${i}...`);
-            const { data: { text } } = await worker.recognize(canvas);
+            const { data } = await worker.recognize(canvas) as any;
+            const { text, words } = data;
+            const items = (words || []).map((w: any) => ({
+                str: w.text,
+                left: w.bbox.x0 / 2.0,
+                top: w.bbox.y0 / 2.0,
+                width: (w.bbox.x1 - w.bbox.x0) / 2.0,
+                height: (w.bbox.y1 - w.bbox.y0) / 2.0,
+            }));
             console.log(`Page ${i} OCR Result Length: ${text.length} characters`);
 
             pages.push({
                 pageNumber: i,
                 text: text.trim(),
+                items
             });
         }
     } catch (ocrError) {
@@ -126,18 +151,37 @@ export function chunkText(
     let chunkIndex = 0;
 
     for (const page of pages) {
-        const words = page.text.split(/\s+/);
+        if (page.items && page.items.length > 0) {
+            // Chunk based on text items with positional data
+            for (let i = 0; i < page.items.length; i += chunkSize - overlap) {
+                const chunkItems = page.items.slice(i, i + chunkSize);
+                const chunkText = chunkItems.map(item => item.str).join(' ');
 
-        for (let i = 0; i < words.length; i += chunkSize - overlap) {
-            const chunkWords = words.slice(i, i + chunkSize);
-            const chunkText = chunkWords.join(' ');
+                if (chunkText.trim().length > 0) {
+                    chunks.push({
+                        chunkId: `chunk-${page.pageNumber}-${chunkIndex}`,
+                        text: chunkText,
+                        pageNumber: page.pageNumber,
+                        chunkIndex: chunkIndex++,
+                        rects: chunkItems.map(it => ({ top: it.top, left: it.left, width: it.width, height: it.height }))
+                    });
+                }
+            }
+        } else {
+            // Fallback to purely text-based chunking without rects
+            const words = page.text.split(/\s+/);
+            for (let i = 0; i < words.length; i += chunkSize - overlap) {
+                const chunkWords = words.slice(i, i + chunkSize);
+                const chunkText = chunkWords.join(' ');
 
-            if (chunkText.trim().length > 0) {
-                chunks.push({
-                    text: chunkText,
-                    pageNumber: page.pageNumber,
-                    chunkIndex: chunkIndex++,
-                });
+                if (chunkText.trim().length > 0) {
+                    chunks.push({
+                        chunkId: `chunk-${page.pageNumber}-${chunkIndex}`,
+                        text: chunkText,
+                        pageNumber: page.pageNumber,
+                        chunkIndex: chunkIndex++,
+                    });
+                }
             }
         }
     }

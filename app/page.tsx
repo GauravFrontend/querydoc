@@ -119,8 +119,8 @@ export default function Home() {
         return;
       }
 
-      // Chunk the text
-      const textChunks = chunkText(pages, 500, 50);
+      // Chunk the text into smaller pieces for precise highlighting
+      const textChunks = chunkText(pages, 100, 20);
 
       setPdfFile(file);
       setChunks(textChunks);
@@ -159,7 +159,7 @@ export default function Home() {
 
       console.log('OCR Complete. Extracted pages:', pages.length);
       setExtractedPages(pages);
-      const textChunks = chunkText(pages, 500, 50);
+      const textChunks = chunkText(pages, 100, 20);
 
       setPdfFile(fileToProcess);
       setChunks(textChunks);
