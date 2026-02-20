@@ -3,6 +3,8 @@
 import { Message as MessageType } from '@/types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useState, useRef, useEffect } from 'react';
+import { playTTS, stopTTS, pauseTTS, resumeTTS } from '@/lib/tts';
 
 interface MessageProps {
     message: MessageType;
@@ -10,20 +12,203 @@ interface MessageProps {
 
 export default function Message({ message }: MessageProps) {
     const isUser = message.role === 'user';
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
+    const messageRef = useRef<HTMLDivElement>(null);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (isPlaying) stopTTS();
+        };
+    }, [isPlaying]);
+
+    // Spacebar to pause/resume
+    useEffect(() => {
+        if (!isPlaying) return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const activeTag = document.activeElement?.tagName;
+            if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (isPaused) {
+                    resumeTTS();
+                    setIsPaused(false);
+                } else {
+                    pauseTTS();
+                    setIsPaused(true);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isPlaying, isPaused]);
+
+    const clearHighlight = () => {
+        // @ts-ignore
+        if (typeof CSS !== 'undefined' && 'highlights' in CSS) {
+            // @ts-ignore
+            CSS.highlights.delete('tts-highlight');
+        }
+    };
+
+    const applyHighlight = (startIndex: number) => {
+        if (!messageRef.current || typeof CSS === 'undefined' || !('highlights' in CSS)) return;
+
+        const text = messageRef.current.textContent || '';
+        if (!text) return;
+
+        // Find sentence boundaries
+        const textBefore = text.substring(0, startIndex);
+        const matchStarts = [...textBefore.matchAll(/[.?!]\s+|\n+/g)];
+        const sentenceStart = matchStarts.length > 0 ? matchStarts[matchStarts.length - 1].index! + matchStarts[matchStarts.length - 1][0].length : 0;
+
+        const textAfter = text.substring(startIndex);
+        const matchEnd = textAfter.match(/[.?!](\s+|$)|(\n+)/);
+        const sentenceEnd = matchEnd ? startIndex + matchEnd.index! + matchEnd[0].length : text.length;
+
+        const treeWalker = document.createTreeWalker(messageRef.current, NodeFilter.SHOW_TEXT);
+        let currentIndex = 0;
+        let startNode = null, endNode = null, startOff = 0, endOff = 0;
+
+        while (treeWalker.nextNode()) {
+            const node = treeWalker.currentNode;
+            const nodeLen = node.textContent?.length || 0;
+
+            if (!startNode && currentIndex + nodeLen > sentenceStart) {
+                startNode = node;
+                startOff = sentenceStart - currentIndex;
+            }
+            if (startNode && currentIndex + nodeLen >= sentenceEnd) {
+                endNode = node;
+                endOff = sentenceEnd - currentIndex;
+                break;
+            }
+            currentIndex += nodeLen;
+        }
+
+        if (startNode && endNode) {
+            try {
+                const range = new Range();
+                range.setStart(startNode, startOff);
+
+                // Safety check in case sentenceEnd overshoots current text node length at the very end
+                if (endOff > (endNode.textContent?.length || 0)) {
+                    range.setEnd(endNode, endNode.textContent?.length || 0);
+                } else {
+                    range.setEnd(endNode, endOff);
+                }
+
+                // @ts-ignore
+                const highlight = new Highlight(range);
+                // @ts-ignore
+                CSS.highlights.set('tts-highlight', highlight);
+
+                // Auto-scroll logic safely
+                const rect = range.getBoundingClientRect();
+                if (rect.top < 100 || rect.bottom > window.innerHeight - 100) {
+                    window.scrollBy({ top: rect.top - Math.max(100, window.innerHeight / 3), behavior: 'smooth' });
+                }
+            } catch (e) {
+                console.error("Highlight error", e);
+            }
+        }
+    };
+
+    const startPlayback = (startIndex = 0) => {
+        if (!messageRef.current) return;
+        const fullText = messageRef.current.textContent || '';
+
+        if (startIndex === 0 && isPlaying && !isPaused) {
+            // Stop toggle
+            stopTTS();
+            setIsPlaying(false);
+            setIsPaused(false);
+            clearHighlight();
+            return;
+        }
+
+        setIsPlaying(true);
+        setIsPaused(false);
+
+        playTTS(
+            fullText,
+            startIndex,
+            (charIdx) => applyHighlight(charIdx),
+            () => {
+                setIsPlaying(false);
+                setIsPaused(false);
+                clearHighlight();
+            },
+            () => {
+                setIsPlaying(false);
+                setIsPaused(false);
+                clearHighlight();
+            }
+        );
+    };
+
+    // Handle skip to section on click
+    const handleMessageClick = (e: React.MouseEvent) => {
+        if (!isPlaying || !messageRef.current) return;
+
+        let range: Range | null = null;
+        const docObj = document as any;
+
+        if (docObj.caretRangeFromPoint) {
+            range = docObj.caretRangeFromPoint(e.clientX, e.clientY);
+        } else if (docObj.caretPositionFromPoint) {
+            const pos = docObj.caretPositionFromPoint(e.clientX, e.clientY);
+            if (pos) {
+                range = document.createRange();
+                range.setStart(pos.offsetNode, pos.offset);
+            }
+        }
+
+        if (range && messageRef.current.contains(range.startContainer)) {
+            const treeWalker = document.createTreeWalker(messageRef.current, NodeFilter.SHOW_TEXT);
+            let charCount = 0;
+
+            while (treeWalker.nextNode()) {
+                const node = treeWalker.currentNode;
+                if (node === range.startContainer) {
+                    charCount += range.startOffset;
+                    break;
+                }
+                charCount += node.textContent?.length || 0;
+            }
+
+            const textBefore = messageRef.current.textContent?.substring(0, charCount) || '';
+            const matchStarts = [...textBefore.matchAll(/[.?!]\s+|\n+/g)];
+            const sentenceStart = matchStarts.length > 0 ? matchStarts[matchStarts.length - 1].index! + matchStarts[matchStarts.length - 1][0].length : 0;
+
+            startPlayback(sentenceStart);
+        }
+    };
 
     return (
         <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 animate-fadeIn`}>
+            {!isUser && (
+                <style dangerouslySetInnerHTML={{ __html: `::highlight(tts-highlight) { background-color: #bfdbfe; color: #1e3a8a; }` }} />
+            )}
             <div
                 className={`
-          max-w-[80%] rounded-2xl px-4 py-3 shadow-sm
+          relative max-w-[80%] rounded-2xl px-4 py-3 shadow-sm
           ${isUser
                         ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-800 border border-gray-200'
+                        : 'bg-white text-gray-800 border border-gray-200 group transition-all duration-300'
                     }
         `}
             >
                 {/* Message content */}
-                <div className="text-sm break-words">
+                <div
+                    ref={messageRef}
+                    onClick={handleMessageClick}
+                    className={`text-sm break-words ${isPlaying && !isUser ? 'cursor-pointer hover:[&_*]:text-blue-900' : ''}`}
+                >
                     {isUser ? (
                         <div className="whitespace-pre-wrap">{message.content}</div>
                     ) : (
@@ -137,9 +322,34 @@ export default function Message({ message }: MessageProps) {
                     </div>
                 )}
 
-                {/* Timestamp */}
-                <div className={`text-xs mt-1 ${isUser ? 'text-blue-100' : 'text-gray-400'}`}>
-                    {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {/* Timestamp & Playback Toggle */}
+                <div className={`text-xs mt-1 flex items-center justify-between ${isUser ? 'text-blue-100' : 'text-gray-400'}`}>
+                    <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+
+                    {!isUser && (
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {isPlaying && (
+                                <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded mr-1 animate-pulse">
+                                    {isPaused ? 'Paused (Space)' : 'Playing (Click to jump)'}
+                                </span>
+                            )}
+                            <button
+                                onClick={() => startPlayback(0)}
+                                className={`p-1.5 rounded-full hover:bg-gray-100 transition-colors ${isPlaying ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-gray-400 hover:text-gray-700'}`}
+                                title={isPlaying ? "Stop reading" : "Read aloud"}
+                            >
+                                {isPlaying ? (
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <rect x="6" y="6" width="12" height="12" rx="2" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-4 h-4 translate-x-0.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z" />
+                                    </svg>
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

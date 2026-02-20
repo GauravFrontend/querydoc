@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { getTTSConfig, saveTTSConfig, TTSConfig } from '@/lib/tts';
 
 interface ModelSelectorProps {
     selectedModel: string;
@@ -54,6 +55,10 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
     const dropdownRef = useRef<HTMLDivElement>(null);
     const currentModel = MODELS.find(m => m.id === selectedModel) || MODELS[1];
 
+    // TTS State
+    const [ttsConfig, setTtsConfig] = useState<TTSConfig>(() => getTTSConfig());
+    const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -63,6 +68,23 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        const loadVoices = () => {
+            const vcs = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith('en')); // Show EN mostly
+            setVoices(vcs);
+        };
+        loadVoices();
+        if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+    }, []);
+
+    const updateTTS = (updates: Partial<TTSConfig>) => {
+        const newConf = { ...ttsConfig, ...updates };
+        setTtsConfig(newConf);
+        saveTTSConfig(newConf);
+    };
 
     return (
         <div className="relative" ref={dropdownRef}>
@@ -108,6 +130,73 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
                             </span>
                         </button>
                     ))}
+
+                    {/* Audio Settings Section */}
+                    <div className="border-t border-gray-200 bg-gray-50 p-4">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                            </svg>
+                            Voice Reader
+                        </h3>
+
+                        {/* Top Toggles */}
+                        <div className="flex bg-gray-200/50 rounded-lg p-0.5 mb-3 text-xs w-full font-medium">
+                            <button
+                                onClick={() => updateTTS({ provider: 'browser' })}
+                                className={`flex-1 py-1.5 rounded-md transition-all ${ttsConfig.provider === 'browser' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Local
+                            </button>
+                            <button
+                                onClick={() => updateTTS({ provider: 'cloud' })}
+                                className={`flex-1 flex gap-1 justify-center items-center py-1.5 rounded-md transition-all ${ttsConfig.provider === 'cloud' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Cloud ☁️
+                            </button>
+                        </div>
+
+                        {ttsConfig.provider === 'cloud' && (
+                            <div className="mb-3">
+                                <label className="text-[10px] font-bold text-gray-500 mb-1 block">OpenAI API Key (Stored Locally)</label>
+                                <input
+                                    type="password"
+                                    placeholder="sk-..."
+                                    className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none"
+                                    value={ttsConfig.cloudApiKey}
+                                    onChange={(e) => updateTTS({ cloudApiKey: e.target.value })}
+                                />
+                            </div>
+                        )}
+
+                        {ttsConfig.provider === 'browser' && voices.length > 0 && (
+                            <div className="mb-3 flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-gray-500">System Voice</label>
+                                <select
+                                    className="w-full text-xs px-2 py-1.5 bg-white border border-gray-200 rounded-lg outline-none"
+                                    value={ttsConfig.browserVoiceURI}
+                                    onChange={(e) => updateTTS({ browserVoiceURI: e.target.value })}
+                                >
+                                    <option value="">Default OS Voice</option>
+                                    {voices.map(v => (
+                                        <option key={v.voiceURI} value={v.voiceURI}>{v.name.substring(0, 30)}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {/* Speed Slider */}
+                        <div className="flex items-center gap-3">
+                            <label className="text-[10px] font-bold text-gray-500 whitespace-nowrap">Speed: {ttsConfig.speed}x</label>
+                            <input
+                                type="range"
+                                min="0.5" max="2" step="0.1"
+                                value={ttsConfig.speed}
+                                onChange={(e) => updateTTS({ speed: parseFloat(e.target.value) })}
+                                className="w-full accent-blue-500"
+                            />
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
