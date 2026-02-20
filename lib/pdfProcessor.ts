@@ -152,18 +152,85 @@ export function chunkText(
 
     for (const page of pages) {
         if (page.items && page.items.length > 0) {
-            // Chunk based on text items with positional data
-            for (let i = 0; i < page.items.length; i += chunkSize - overlap) {
-                const chunkItems = page.items.slice(i, i + chunkSize);
-                const chunkText = chunkItems.map(item => item.str).join(' ');
+            // Group text items by y-coordinate into lines
+            // Items with similar y-coordinates (top) belong to the same line
+            const Y_TOLERANCE = 5; // Pixels difference to still be considered same line
 
-                if (chunkText.trim().length > 0) {
+            // First sort items vertically then horizontally
+            const sortedItems = [...page.items].sort((a, b) => {
+                if (Math.abs(a.top - b.top) > Y_TOLERANCE) {
+                    return a.top - b.top;
+                }
+                return a.left - b.left;
+            });
+
+            const lines: { top: number, height: number, items: any[], text: string }[] = [];
+            let currentLine: any[] = [];
+            let currentLineTop = sortedItems[0]?.top;
+            let currentLineHeight = sortedItems[0]?.height || 10;
+
+            for (const item of sortedItems) {
+                if (Math.abs(item.top - currentLineTop) > Y_TOLERANCE) {
+                    // New line
+                    if (currentLine.length > 0) {
+                        lines.push({
+                            top: currentLineTop,
+                            height: currentLineHeight,
+                            items: currentLine,
+                            text: currentLine.map(it => it.str).join(' ')
+                        });
+                    }
+                    currentLine = [item];
+                    currentLineTop = item.top;
+                    currentLineHeight = item.height || 10;
+                } else {
+                    currentLine.push(item);
+                    currentLineHeight = Math.max(currentLineHeight, item.height || 10);
+                }
+            }
+            if (currentLine.length > 0) {
+                lines.push({
+                    top: currentLineTop,
+                    height: currentLineHeight,
+                    items: currentLine,
+                    text: currentLine.map(it => it.str).join(' ')
+                });
+            }
+
+            // Group lines into paragraphs
+            const paragraphs: any[][] = []; // Array of arrays of items
+            let currentParagraph: any[] = [];
+            let lastLineTop = lines[0]?.top;
+
+            for (const line of lines) {
+                // If vertical gap is larger than 1.5x the typical line height, consider it a new paragraph
+                const verticalGap = line.top - lastLineTop;
+                const isNewParagraph = verticalGap > (line.height * 1.5);
+
+                if (isNewParagraph && currentParagraph.length > 0) {
+                    paragraphs.push(currentParagraph);
+                    currentParagraph = [...line.items];
+                } else {
+                    currentParagraph.push(...line.items);
+                }
+                lastLineTop = line.top;
+            }
+            if (currentParagraph.length > 0) {
+                paragraphs.push(currentParagraph);
+            }
+
+            // Convert paragraphs into chunks
+            for (const paragraphItems of paragraphs) {
+                const chunkText = paragraphItems.map(item => item.str).join(' ');
+
+                // Skip very small chunks (e.g., single artifacts, page numbers) unless they are the only things
+                if (chunkText.trim().length > 5) {
                     chunks.push({
                         chunkId: `chunk-${page.pageNumber}-${chunkIndex}`,
                         text: chunkText,
                         pageNumber: page.pageNumber,
                         chunkIndex: chunkIndex++,
-                        rects: chunkItems.map(it => ({ top: it.top, left: it.left, width: it.width, height: it.height }))
+                        rects: paragraphItems.map(it => ({ top: it.top, left: it.left, width: it.width, height: it.height }))
                     });
                 }
             }

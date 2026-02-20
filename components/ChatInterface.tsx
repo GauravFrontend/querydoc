@@ -156,19 +156,11 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
         });
 
         try {
-            // Find relevant chunks (top 8 because chunks are now smaller for precise highlighting)
-            const relevantChunks = findRelevantChunks(question, chunks, 8);
+            // Find relevant chunks (top 5 because paragraphs are larger but structured)
+            const relevantChunks = findRelevantChunks(question, chunks, 5);
 
             if (relevantChunks.length === 0) {
                 throw new Error('No relevant content found in the document.');
-            }
-
-            // Auto-navigate to the most relevant chunk
-            if (relevantChunks.length > 0) {
-                setTimeout(() => {
-                    const event = new CustomEvent('jump-to-source', { detail: relevantChunks[0] });
-                    window.dispatchEvent(event);
-                }, 100); // Small delay to allow UI to transition if needed
             }
 
             // Get recent history
@@ -208,13 +200,82 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                 responseStats = result.stats;
             }
 
+            // Pinpoint the exact sentence in the chunks
+            let pinpointedChunks = [...relevantChunks];
+            try {
+                const pinpointPrompt = `Given this Answer:\n"${fullResponse}"\n\nAnd these source paragraphs:\n${relevantChunks.map(c => `[ID: ${c.chunkId}] ${c.text}`).join('\n\n')}\n\nReturn EXACTLY and ONLY the single most relevant sentence or short phrase from the source paragraphs that supports the answer. Do not add any conversational text. Return just the raw string exactly as it appears in the source.`;
+
+                let pinpointResult = '';
+                if (effectiveIsCloud) {
+                    await queryGroq(pinpointPrompt, 'llama-3.1-8b-instant', (chunk: string) => { pinpointResult += chunk; });
+                } else {
+                    const res = await queryOllama(pinpointPrompt, effectiveModel, (chunk: string) => { });
+                    pinpointResult = res.response;
+                }
+
+                // Clean up result
+                const exactPhrase = pinpointResult.trim().replace(/^["']|["']$/g, '');
+
+                if (exactPhrase && exactPhrase.length > 10) {
+                    // Try to find this phrase in our chunks
+                    pinpointedChunks = relevantChunks.map(chunk => {
+                        const phraseLower = exactPhrase.toLowerCase();
+                        const chunkLower = chunk.text.toLowerCase();
+                        const idxStart = chunkLower.indexOf(phraseLower);
+
+                        if (idxStart !== -1 && chunk.rects && chunk.rects.length > 0) {
+                            // Find which word items encompass this substring
+                            // We can approximate by matching the character offset ratio, or by rebuilding text from rects.
+                            // The simplest robust approach: since `chunk.rects` often corresponds to items separated by spaces,
+                            // we split the text and find start/end word indices.
+
+                            const beforeStr = chunkLower.slice(0, idxStart);
+                            const activeStr = chunkLower.slice(idxStart, idxStart + exactPhrase.length);
+
+                            // Count how many words come before the target phrase
+                            const startWordIndex = beforeStr.trim() ? beforeStr.trim().split(/\s+/).length : 0;
+                            // Count how many words are in the target phrase itself
+                            const phraseWordCount = activeStr.trim().split(/\s+/).length;
+                            const endWordIndex = startWordIndex + phraseWordCount;
+
+                            // Assuming chunk.rects essentially maps 1:1 with words since we slice chunks 
+                            // word-by-word (or item-by-item which is roughly word-by-word)
+                            // If `rects` length roughly matches word length, we slice rects
+
+                            if (startWordIndex < chunk.rects.length) {
+                                // Clamp endWordIndex to valid range
+                                const validEndWordIndex = Math.min(endWordIndex, chunk.rects.length);
+                                const newRects = chunk.rects.slice(startWordIndex, validEndWordIndex);
+
+                                return {
+                                    ...chunk,
+                                    pinpointText: exactPhrase,
+                                    rects: newRects.length > 0 ? newRects : chunk.rects
+                                };
+                            }
+                        }
+                        return chunk;
+                    });
+                }
+            } catch (e) {
+                console.error("Pinpointing failed, falling back to full chunk:", e);
+            }
+
+            // Auto-navigate to the most relevant chunk
+            if (pinpointedChunks.length > 0) {
+                setTimeout(() => {
+                    const event = new CustomEvent('jump-to-source', { detail: pinpointedChunks[0] });
+                    window.dispatchEvent(event);
+                }, 100);
+            }
+
             // Add assistant message
             const assistantMessage: MessageType = {
                 id: (Date.now() + 2).toString(),
                 role: 'assistant',
                 content: fullResponse,
-                pageNumber: relevantChunks[0]?.pageNumber,
-                sourceChunks: relevantChunks,
+                pageNumber: pinpointedChunks[0]?.pageNumber,
+                sourceChunks: pinpointedChunks,
                 timestamp: new Date(),
                 stats: responseStats
             };
