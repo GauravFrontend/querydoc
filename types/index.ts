@@ -14,6 +14,8 @@ export interface PageText {
 
 export interface Chunk {
     chunkId: string;
+    documentId?: string; // To link to a specific document
+    documentName?: string;
     text: string;
     pageNumber: number;
     chunkIndex: number;
@@ -25,6 +27,7 @@ export interface Message {
     role: 'user' | 'assistant';
     content: string;
     pageNumber?: number;
+    documentId?: string;
     sourceChunks?: Chunk[];
     timestamp: Date;
     stats?: {
@@ -47,4 +50,14 @@ export interface SelectionData {
     text: string;
     rects: DOMRect[];
     pageNumber: number;
+}
+
+export interface ManagedDocument {
+    id: string;
+    name: string;
+    file: File | null;
+    chunks: Chunk[];
+    extractedPages: PageText[];
+    summary?: string;
+    currentPage: number;
 }

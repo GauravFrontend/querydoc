@@ -1,11 +1,10 @@
 import { openDB } from 'idb';
-import { Chunk, PageText } from '@/types';
+import { ManagedDocument } from '@/types';
 
 const DB_NAME = 'querydoc_db';
 const STORE_NAME = 'pdf_store';
-const PDF_KEY = 'active_pdf';
 
-export async function savePDF(file: File) {
+export async function savePDF(id: string, file: File) {
     const db = await openDB(DB_NAME, 1, {
         upgrade(db) {
             db.createObjectStore(STORE_NAME);
@@ -13,20 +12,25 @@ export async function savePDF(file: File) {
     });
     // Store as Blob + Name for restoration
     const blob = new Blob([file], { type: 'application/pdf' });
-    await db.put(STORE_NAME, { blob, name: file.name }, PDF_KEY);
+    await db.put(STORE_NAME, { blob, name: file.name }, id);
 }
 
-export async function getPDF(): Promise<File | null> {
+export async function getPDF(id: string): Promise<File | null> {
     const db = await openDB(DB_NAME, 1, {
         upgrade(db) {
             db.createObjectStore(STORE_NAME);
         },
     });
-    const data = await db.get(STORE_NAME, PDF_KEY);
+    const data = await db.get(STORE_NAME, id);
     if (data && data.blob) {
         return new File([data.blob], data.name, { type: 'application/pdf' });
     }
     return null;
+}
+
+export async function deletePDF(id: string) {
+    const db = await openDB(DB_NAME, 1);
+    await db.delete(STORE_NAME, id);
 }
 
 export async function clearStorage() {
@@ -41,10 +45,9 @@ export async function clearStorage() {
 }
 
 interface AppState {
-    chunks: Chunk[];
-    extractedPages: PageText[];
+    documents: Omit<ManagedDocument, 'file'>[];
+    activeDocumentId: string | null;
     selectedModel: string;
-    currentPage: number;
 }
 
 export function saveState(state: AppState) {
@@ -53,5 +56,10 @@ export function saveState(state: AppState) {
 
 export function getState(): AppState | null {
     const raw = localStorage.getItem('querydoc_state');
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    try {
+        return JSON.parse(raw);
+    } catch (e) {
+        return null;
+    }
 }

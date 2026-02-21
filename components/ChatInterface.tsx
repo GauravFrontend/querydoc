@@ -156,18 +156,18 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
         });
 
         try {
-            // Find relevant chunks (top 5 because paragraphs are larger but structured)
-            const relevantChunks = findRelevantChunks(question, chunks, 5);
-
-            if (relevantChunks.length === 0) {
-                throw new Error('No relevant content found in the document.');
-            }
-
-            // Get recent history
+            // Get recent history for context
             const history = messages.slice(-4).map(m => ({
                 role: m.role,
                 content: m.content
             }));
+
+            // Find relevant chunks (pass history for query expansion)
+            const relevantChunks = findRelevantChunks(question, chunks, 15, history);
+
+            if (relevantChunks.length === 0) {
+                throw new Error('No relevant content found in the document.');
+            }
 
             // Build prompt
             const prompt = buildPrompt(question, relevantChunks, history);

@@ -123,18 +123,30 @@ export async function extractTextFromPDFWithOCR(
 }
 
 /**
- * Detect if PDF appears to be scanned (image-based)
+ * Detect if PDF appears to be scanned (image-based) or has a poor text layer
  */
 export function detectScannedPDF(pages: PageText[]): boolean {
     const totalText = pages.reduce((acc, page) => acc + page.text, '');
 
-    // Check if total text is very low across the processed range
-    if (totalText.length < 100) return true;
+    // 1. Check if total text is extremely low
+    if (totalText.length < 50) return true;
 
-    // IMPORTANT: Check if any individual page is empty.
-    // In handwritten scans, often one page fails completely while others have "garbage" text.
+    // 2. Check for "Broken Text Layer" (many 1-2 char words)
+    // Common in scans with bad OCR or complex layouts
+    const words = totalText.split(/\s+/).filter(w => w.length > 0);
+    if (words.length > 0) {
+        const avgWordLength = totalText.length / words.length;
+        // Natural language average is ~5. If it's < 3, it's likely single characters or garbage
+        if (avgWordLength < 3.0 && totalText.length < 1000) return true;
+    }
+
+    // 3. Check for specific markers of bad extraction
     const hasEmptyPage = pages.some(p => p.text.trim().length === 0);
-    if (hasEmptyPage) return true;
+    if (hasEmptyPage && pages.length > 0) return true;
+
+    // 4. Check text density (characters per page)
+    const avgCharsPerPage = totalText.length / pages.length;
+    if (avgCharsPerPage < 30) return true;
 
     return false;
 }

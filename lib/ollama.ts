@@ -107,3 +107,23 @@ export async function checkOllamaStatus(): Promise<boolean> {
         return false;
     }
 }
+/**
+ * Generate a smart summary of a document
+ */
+export async function generateSummary(text: string, model: string): Promise<string> {
+    const prompt = `Below is the content of a document. Please provide a concise, structured summary.
+If it's a RESUME, include: Name, Skills, Experience years, and key roles.
+If it's a RESEARCH PAPER, include: Abstract/Objective, Key Findings, and Methodology.
+If it's a CONTRACT, include: Parties, Key dates, and Obligations.
+For any other doc: Main topic and 3 key points.
+
+DOCUMENT CONTENT:
+"
+${text.substring(0, 3000)}
+"
+
+SUMMARY:`;
+
+    const result = await queryOllama(prompt, model, () => { });
+    return result.response;
+}
