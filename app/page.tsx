@@ -26,9 +26,18 @@ export default function Home() {
   const [ocrStatus, setOcrStatus] = useState<{ page: number, total: number, status: string } | null>(null);
   const [autoOCRCountdown, setAutoOCRCountdown] = useState<number | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
-  const [chatWidth, setChatWidth] = useState(450);
+  const [chatWidth, setChatWidth] = useState(600); // Sensible fallback
   const [isResizing, setIsResizing] = useState(false);
   const [isChatBusy, setIsChatBusy] = useState(false);
+
+  // Set default 50/50 split on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const sidebarWidth = 260; // Approximate width of DocumentSidebar
+      const availableWidth = window.innerWidth - sidebarWidth;
+      setChatWidth(availableWidth / 2);
+    }
+  }, []);
 
   const activeDocument = documents.find(d => d.id === activeDocumentId) || null;
 

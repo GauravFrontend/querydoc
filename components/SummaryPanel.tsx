@@ -44,29 +44,31 @@ export default function SummaryPanel({ summary, fileName, isGenerating }: Summar
 
             {!isCollapsed && (
                 <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-300">
-                    {isGenerating ? (
-                        <div className="space-y-3 py-2">
-                            <div className="h-3 bg-blue-100/50 rounded-full w-3/4 animate-pulse"></div>
-                            <div className="h-3 bg-blue-100/50 rounded-full w-full animate-pulse"></div>
-                            <div className="h-3 bg-blue-100/50 rounded-full w-2/3 animate-pulse"></div>
-                        </div>
-                    ) : (
-                        <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed text-xs">
-                            <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                components={{
-                                    h1: ({ node, ...props }) => <h1 className="text-sm font-bold text-gray-900 mt-3 mb-1" {...props} />,
-                                    h2: ({ node, ...props }) => <h2 className="text-xs font-bold text-gray-900 mt-2 mb-1" {...props} />,
-                                    h3: ({ node, ...props }) => <h3 className="text-[11px] font-bold text-gray-900 mt-2 mb-0.5" {...props} />,
-                                    p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-                                    ul: ({ node, ...props }) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
-                                    li: ({ node, ...props }) => <li className="pl-1" {...props} />
-                                }}
-                            >
-                                {summary || ''}
-                            </ReactMarkdown>
-                        </div>
-                    )}
+                    <div className="max-h-[400px] overflow-y-auto custom-scrollbar pr-2 -mr-2">
+                        {isGenerating ? (
+                            <div className="space-y-3 py-2">
+                                <div className="h-3 bg-blue-100/50 rounded-full w-3/4 animate-pulse"></div>
+                                <div className="h-3 bg-blue-100/50 rounded-full w-full animate-pulse"></div>
+                                <div className="h-3 bg-blue-100/50 rounded-full w-2/3 animate-pulse"></div>
+                            </div>
+                        ) : (
+                            <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed text-xs">
+                                <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={{
+                                        h1: ({ node, ...props }) => <h1 className="text-sm font-bold text-gray-900 mt-3 mb-1" {...props} />,
+                                        h2: ({ node, ...props }) => <h2 className="text-xs font-bold text-gray-900 mt-2 mb-1" {...props} />,
+                                        h3: ({ node, ...props }) => <h3 className="text-[11px] font-bold text-gray-900 mt-2 mb-0.5" {...props} />,
+                                        p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+                                        ul: ({ node, ...props }) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
+                                        li: ({ node, ...props }) => <li className="pl-1" {...props} />
+                                    }}
+                                >
+                                    {summary || ''}
+                                </ReactMarkdown>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

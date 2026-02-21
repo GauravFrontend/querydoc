@@ -322,8 +322,22 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange, on
             }
         };
 
+        const handleAskAIFill = (event: any) => {
+            const text = event.detail;
+            if (text) {
+                // Prepend a pointer if you want, or just the text
+                setInput(`Regarding: "${text}"\n\n`);
+                // Auto-focus after fill
+                setTimeout(() => inputRef.current?.focus(), 50);
+            }
+        };
+
         window.addEventListener('ask-ai', handleAskAI);
-        return () => window.removeEventListener('ask-ai', handleAskAI);
+        window.addEventListener('ask-ai-fill', handleAskAIFill);
+        return () => {
+            window.removeEventListener('ask-ai', handleAskAI);
+            window.removeEventListener('ask-ai-fill', handleAskAIFill);
+        };
     }, [chunks, messages, selectedModel, isCloudMode]);
 
     const handleSubmit = async (e: React.FormEvent) => {

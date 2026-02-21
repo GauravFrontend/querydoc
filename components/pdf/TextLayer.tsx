@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { SelectionData } from '@/types';
 
 /**
@@ -30,6 +30,7 @@ interface TextLayerProps {
 export default function TextLayer({ page, viewport, scale, pageNumber, onSelectionChange }: TextLayerProps) {
     const [textItems, setTextItems] = useState<TextItem[]>([]);
     const [hoveredBlockId, setHoveredBlockId] = useState<number | null>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const fetchText = async () => {
@@ -55,6 +56,11 @@ export default function TextLayer({ page, viewport, scale, pageNumber, onSelecti
                     onSelectionChange?.(null);
                     return;
                 }
+
+                // SECURITY CHECK: Only trigger if the selection is actually inside this specific TextLayer
+                // This prevents the popup from appearing when selecting text in Chat or Sidebar
+                const isInside = containerRef.current?.contains(selection.anchorNode);
+                if (!isInside) return;
 
                 const range = selection.getRangeAt(0);
                 const text = selection.toString();
@@ -174,6 +180,7 @@ export default function TextLayer({ page, viewport, scale, pageNumber, onSelecti
 
     return (
         <div
+            ref={containerRef}
             className="absolute inset-0 pointer-events-auto select-text"
             data-page={pageNumber}
             style={{

@@ -316,9 +316,10 @@ export default function PDFViewer({ file, initialPage = 1, onPageChange }: PDFVi
                                 if (action === 'explain') prompt = `Explain this part of the document: "${selection.text}"`;
                                 else if (action === 'summarize') prompt = `Summarize this section: "${selection.text}"`;
                                 else if (action === 'rewrite') prompt = `Rewrite this more clearly: "${selection.text}"`;
-                                else if (action === 'ask') prompt = `Regarding this: "${selection.text}", [your question]`;
+                                else if (action === 'ask') prompt = selection.text;
 
-                                const event = new CustomEvent('ask-ai', { detail: prompt });
+                                const eventName = action === 'ask' ? 'ask-ai-fill' : 'ask-ai';
+                                const event = new CustomEvent(eventName, { detail: prompt });
                                 window.dispatchEvent(event);
                                 setSelection(null);
                                 window.getSelection()?.removeAllRanges();
