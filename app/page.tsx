@@ -26,8 +26,40 @@ export default function Home() {
   const [ocrStatus, setOcrStatus] = useState<{ page: number, total: number, status: string } | null>(null);
   const [autoOCRCountdown, setAutoOCRCountdown] = useState<number | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
+  const [chatWidth, setChatWidth] = useState(450);
+  const [isResizing, setIsResizing] = useState(false);
+  const [isChatBusy, setIsChatBusy] = useState(false);
 
   const activeDocument = documents.find(d => d.id === activeDocumentId) || null;
+
+  // Optimized Resizing logic using rAF
+  useEffect(() => {
+    let animationFrameId: number;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const updateWidth = () => {
+        const newWidth = window.innerWidth - e.clientX;
+        if (newWidth > 300 && newWidth < 800) {
+          setChatWidth(newWidth);
+        }
+      };
+
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = requestAnimationFrame(updateWidth);
+    };
+    const handleMouseUp = () => setIsResizing(false);
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [isResizing]);
 
   // Restore state on mount
   useEffect(() => {
@@ -56,9 +88,11 @@ export default function Home() {
     restore();
   }, []);
 
-  // Save state when it changes
+  // Debounced State Saving (to prevent lag during rapid updates)
   useEffect(() => {
-    if (!isRestoring && documents.length > 0) {
+    if (isRestoring || documents.length === 0) return;
+
+    const timer = setTimeout(() => {
       saveState({
         documents: documents.map(({ file, ...rest }) => rest),
         activeDocumentId,
@@ -67,7 +101,9 @@ export default function Home() {
       if (activeDocument && activeDocument.file) {
         savePDF(activeDocument.id, activeDocument.file);
       }
-    }
+    }, 1000); // Wait 1s after last change before saving
+
+    return () => clearTimeout(timer);
   }, [documents, activeDocumentId, selectedModel, isRestoring, activeDocument]);
 
   // Auto-run OCR Countdown
@@ -113,7 +149,12 @@ export default function Home() {
       const newDoc: ManagedDocument = { id: docId, name: file.name, file, chunks: textChunks, extractedPages: pages, currentPage: 1 };
 
       setDocuments(prev => [...prev, newDoc]);
-      setActiveDocumentId(docId);
+
+      // Don't switch if user is busy chatting, unless it's the very first document
+      if (!isChatBusy || documents.length === 0) {
+        setActiveDocumentId(docId);
+      }
+
       await savePDF(docId, file);
       triggerSummary(newDoc, pages);
     } catch (err) {
@@ -159,7 +200,12 @@ export default function Home() {
       }));
       const newDoc: ManagedDocument = { id: docId, name: fileToProcess.name, file: fileToProcess, chunks: textChunks, extractedPages: pages, currentPage: 1 };
       setDocuments(prev => [...prev, newDoc]);
-      setActiveDocumentId(docId);
+
+      // Don't switch if user is busy chatting
+      if (!isChatBusy || documents.length === 0) {
+        setActiveDocumentId(docId);
+      }
+
       await savePDF(docId, fileToProcess);
       triggerSummary(newDoc, pages);
       setOcrPendingFile(null);
@@ -238,7 +284,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden sm:block"><ModelSelector selectedModel={selectedModel} onModelChange={setSelectedModel} /></div>
-            <button onClick={() => setShowDebug(!showDebug)} className="hidden md:block p-2 text-gray-400 hover:text-blue-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg></button>
+            <button onClick={() => setShowDebug(!showDebug)} className="hidden md:block p-2 text-gray-400 hover:text-blue-600 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg></button>
           </div>
         </div>
       </header>
@@ -247,9 +293,20 @@ export default function Home() {
         <DocumentSidebar documents={documents} activeDocumentId={activeDocumentId} onSelect={setActiveDocumentId} onDelete={handleDeleteDocument} onUploadNew={handleNewDocument} />
 
         <div className="flex-1 flex overflow-hidden">
-          <div className={`${showDebug ? 'w-[35%]' : 'flex-1'} h-full border-r border-gray-200 relative`}>
-            {activeDocument?.file && (
-              <PDFViewer file={activeDocument.file} initialPage={activeDocument.currentPage} onPageChange={(p: number) => setDocumentPage(activeDocument.id, p)} />
+          <div className={`flex-1 h-full border-r border-gray-200 relative ${isResizing ? 'select-none pointer-events-none' : ''}`}>
+            {activeDocument?.file ? (
+              <PDFViewer
+                key={activeDocument.id}
+                file={activeDocument.file}
+                initialPage={activeDocument.currentPage}
+                onPageChange={(p: number) => setDocumentPage(activeDocument.id, p)}
+              />
+            ) : !isRestoring && activeDocument && (
+              <div className="h-full flex flex-col items-center justify-center text-gray-400 p-8 text-center bg-gray-50">
+                <svg className="w-12 h-12 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <p className="font-bold">PDF File Missing</p>
+                <p className="text-xs max-w-[200px]">The file could not be retrieved from your local storage. Try re-uploading.</p>
+              </div>
             )}
           </div>
 
@@ -267,9 +324,22 @@ export default function Home() {
             </div>
           )}
 
-          <div className={`${showDebug ? 'w-[35%]' : 'w-[400px] lg:w-[450px]'} h-full flex flex-col p-4 bg-gray-50/30`}>
+          {/* Resizer Handle */}
+          <div
+            className={`w-1.5 hover:w-2 bg-gray-200 hover:bg-blue-400 transition-all cursor-col-resize relative z-10 group ${isResizing ? 'bg-blue-500 w-2' : ''}`}
+            onMouseDown={() => setIsResizing(true)}
+          >
+            <div className="absolute inset-y-0 -left-2 -right-2 bg-transparent" />
+          </div>
+
+          <div
+            style={{ width: showDebug ? '35%' : `${chatWidth}px` }}
+            className={`h-full flex flex-col p-4 bg-gray-50/30 transition-[width] duration-75 ${isResizing ? 'duration-0 select-none' : ''}`}
+          >
             {activeDocument && <SummaryPanel summary={activeDocument.summary} fileName={activeDocument.name} isGenerating={isGeneratingSummary} />}
-            <div className="flex-1 min-h-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"><ChatInterface chunks={allChunks} selectedModel={selectedModel} onModelChange={setSelectedModel} /></div>
+            <div className="flex-1 min-h-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <ChatInterface chunks={allChunks} selectedModel={selectedModel} onModelChange={setSelectedModel} onBusyChange={setIsChatBusy} />
+            </div>
           </div>
         </div>
       </div>

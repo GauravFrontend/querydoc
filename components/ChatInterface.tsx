@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { Message as MessageType, Chunk } from '@/types';
 import Message from './Message';
 import { queryOllama, checkOllamaStatus, getBaseUrl } from '@/lib/ollama';
@@ -9,13 +9,17 @@ import { findRelevantChunks, buildPrompt } from '@/lib/ragUtils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+// Memoize Message component to prevent unnecessary re-renders during typing/streaming
+const MemoizedMessage = memo(Message);
+
 interface ChatInterfaceProps {
     chunks: Chunk[];
     selectedModel: string;
     onModelChange?: (model: string) => void;
+    onBusyChange?: (isBusy: boolean) => void;
 }
 
-export default function ChatInterface({ chunks, selectedModel, onModelChange }: ChatInterfaceProps) {
+export default function ChatInterface({ chunks, selectedModel, onModelChange, onBusyChange }: ChatInterfaceProps) {
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -58,6 +62,11 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, streamingContent]);
+
+    // Notify parent of busy status
+    useEffect(() => {
+        onBusyChange?.(isLoading || input.trim().length > 0);
+    }, [isLoading, input, onBusyChange]);
 
     // Restore messages on mount
     useEffect(() => {
@@ -384,7 +393,7 @@ export default function ChatInterface({ chunks, selectedModel, onModelChange }: 
                 )}
 
                 {messages.map((message) => (
-                    <Message key={message.id} message={message} />
+                    <MemoizedMessage key={message.id} message={message} />
                 ))}
 
                 {/* Streaming message */}

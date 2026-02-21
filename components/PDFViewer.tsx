@@ -8,7 +8,9 @@ import QuickActions from './pdf/QuickActions';
 import { SelectionData, HighlightArea, Chunk } from '@/types';
 
 // Initialize PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+if (typeof window !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.mjs';
+}
 
 interface PDFViewerProps {
     file: File;
@@ -75,9 +77,16 @@ export default function PDFViewer({ file, initialPage = 1, onPageChange }: PDFVi
     // Load PDF
     useEffect(() => {
         const loadPDF = async () => {
+            if (!file) return;
             try {
+                // Ensure worker is set before loading
+                if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.mjs';
+                }
+
                 const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                const pdf = await loadingTask.promise;
                 setPdfDoc(pdf);
                 setNumPages(pdf.numPages);
             } catch (err) {
@@ -239,6 +248,13 @@ export default function PDFViewer({ file, initialPage = 1, onPageChange }: PDFVi
             <div
                 ref={containerRef}
                 className="flex-1 overflow-auto p-4 flex items-start justify-center min-h-0 relative select-none"
+                onClick={(e) => {
+                    // If clicking the container background (not the page), clear selection
+                    if (e.target === containerRef.current) {
+                        setSelection(null);
+                        window.getSelection()?.removeAllRanges();
+                    }
+                }}
             >
                 <div
                     ref={pageWrapperRef}

@@ -43,24 +43,32 @@ export default function TextLayer({ page, viewport, scale, pageNumber, onSelecti
         fetchText();
     }, [page]);
 
-    // Handle selection changes within this layer
+    // Handle selection changes within this layer with debouncing
     useEffect(() => {
+        let debounceTimer: NodeJS.Timeout;
+
         const handleSelection = () => {
-            const selection = window.getSelection();
-            if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-                onSelectionChange?.(null);
-                return;
-            }
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const selection = window.getSelection();
+                if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+                    onSelectionChange?.(null);
+                    return;
+                }
 
-            const range = selection.getRangeAt(0);
-            const text = selection.toString();
-            const rects = Array.from(range.getClientRects());
+                const range = selection.getRangeAt(0);
+                const text = selection.toString();
+                const rects = Array.from(range.getClientRects());
 
-            onSelectionChange?.({ text, rects, pageNumber });
+                onSelectionChange?.({ text, rects, pageNumber });
+            }, 200); // 200ms debounce
         };
 
         document.addEventListener('selectionchange', handleSelection);
-        return () => document.removeEventListener('selectionchange', handleSelection);
+        return () => {
+            document.removeEventListener('selectionchange', handleSelection);
+            clearTimeout(debounceTimer);
+        };
     }, [onSelectionChange, pageNumber]);
 
     // Group items into logical blocks based on vertical proximity
@@ -177,6 +185,10 @@ export default function TextLayer({ page, viewport, scale, pageNumber, onSelecti
             onClick={(e) => {
                 if (hoveredBlockId !== null) {
                     handleBlockClick(hoveredBlockId);
+                } else {
+                    // Clicked on text layer but not on a specific block
+                    onSelectionChange?.(null);
+                    window.getSelection()?.removeAllRanges();
                 }
             }}
         >
